@@ -1,6 +1,6 @@
   #include <cstdint>
 
-  uint8_t cChar0[] {
+uint8_t cChar0[] {
   0x00,
   0x00,
   0x00,
@@ -11,7 +11,7 @@
   0x1F
   };
 
-  uint8_t cChar1[] {
+uint8_t cChar1[] {
   0x00,
   0x00,
   0x00,
@@ -22,7 +22,7 @@
   0x1F
   };
 
-  uint8_t cChar2[] {
+uint8_t cChar2[] {
   0x00,
   0x00,
   0x00,
@@ -33,7 +33,7 @@
   0x1F
   };
 
-  uint8_t cChar3[] {
+uint8_t cChar3[] {
   0x00,
   0x00,
   0x00,
@@ -44,7 +44,7 @@
   0x1F
   };
 
-  uint8_t cChar4[] {
+uint8_t cChar4[] {
   0x00,
   0x00,
   0x00,
@@ -55,7 +55,7 @@
   0x1F
   };
 
-  uint8_t cChar5[] {
+uint8_t cChar5[] {
   0x00,
   0x00,
   0x00,
