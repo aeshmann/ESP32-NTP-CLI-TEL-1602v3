@@ -64,10 +64,11 @@ void execButton();
 void screenClockV0();
 void screenClockV1();
 
-void wfrxChar(int, int);
-void wfInfo();
-void wfScan();
-void hwInfo();
+void indWiFiRx(int, int);
+void commSerial();
+void infoWiFi(int);
+void infoChip(int);
+void scanWiFi();
 
 void setup();
 void loop();
@@ -84,6 +85,7 @@ bool initWiFi(const char *mssid, const char *mpass,
   int i = 0;
   WiFi.mode(WIFI_STA);
   WiFi.disconnect();
+  digitalWrite(LED_BUILTIN, LOW);
   delay(100);
   TRACE("Connecting to Wifi:\n");
   WiFi.begin(mssid, mpass);
@@ -97,7 +99,8 @@ bool initWiFi(const char *mssid, const char *mpass,
   WiFi.setAutoReconnect(true);
   WiFi.persistent(true);
   return isConnected();
-  wfInfo();
+  digitalWrite(LED_BUILTIN, HIGH);
+  infoWiFi(5);
 }
 
 bool isConnected()
@@ -212,49 +215,14 @@ void onTelnetInput(String comm_telnet)
   case 5:
     for (int k = 1; k < comm_qty; k++)
     {
-      TLNET("%s - %s\n", comm_array[k][0], comm_array[k][1].c_str() );
+      TLNET("[ %d ] %s\t- %s\n", k, comm_array[k][0], comm_array[k][1].c_str() );
     }
     break;
   case 6:
-  {
-    TLNET(R"(
-  Connection Details:
-  ------------------
-  SSID       : %s
-  Hostname   : %s
-  IP-Address : %s
-  Gateway    : %s
-  DNS server : %s
-  MAC-Address: %s
-  RSSI       : %d
-  )",
-          WiFi.SSID().c_str(),
-          // WiFi.hostname().c_str(),  // ESP8266
-          WiFi.getHostname(), // ESP32
-          WiFi.localIP().toString().c_str(),
-          WiFi.gatewayIP().toString().c_str(),
-          WiFi.dnsIP().toString().c_str(),
-          WiFi.macAddress().c_str(),
-          WiFi.RSSI());
-    TLNET("\n");
-  }
+    infoWiFi(7);
   break;
   case 7:
-  {
-    TLNET("Chip model: %s Rev %d\n", ESP.getChipModel(), ESP.getChipRevision());
-    TLNET("CPU has %d cores at %dMHz\n", ESP.getChipCores(), ESP.getCpuFreqMHz());
-    TLNET("Flash frequency is %dMHz\n", ESP.getFlashChipSpeed() / 1000000);
-    TLNET("Flash chip size: %d bytes\n", ESP.getFlashChipSize());
-
-    uint32_t total_internal_memory = heap_caps_get_total_size(MALLOC_CAP_INTERNAL);
-    uint32_t free_internal_memory = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
-    uint32_t largest_contig_internal_block = heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL);
-
-    TLNET("Free  heap (internal memory) : %d bytes\n", esp_get_free_heap_size());
-    TLNET("Total DRAM (internal memory) : %d bytes\n", total_internal_memory);
-    TLNET("Free  DRAM (internal memory) : %d bytes\n", free_internal_memory);
-    TLNET("Largest free cont. DRAM block: %d bytes\n", largest_contig_internal_block);
-  }
+    infoChip(7);
   break;
   case 8:
   {
@@ -312,30 +280,56 @@ void onTelnetInput(String comm_telnet)
   }
 }
 
-void wfInfo()
+void infoWiFi(int wifiinfo_out)
 {
   if (isConnected())
   {
-    TRACE("\n");
-    WiFi.printDiag(Serial);
-    TRACE("\n");
-    TRACE("WiFi SSID: \t%s\n", mssid);
-    TRACE("WiFi RSSI: \t%d dBm\n", WiFi.RSSI());
-    TRACE("Local ip: \t%s\n", WiFi.localIP().toString().c_str());
-    TRACE("Gateway ip: \t%s\n", WiFi.gatewayIP().toString().c_str());
-    TRACE("DNS ip: \t%s\n", WiFi.dnsIP().toString().c_str());
-    TRACE("Subnet mask: \t%s\n", WiFi.subnetMask().toString().c_str());
-    TRACE("MAC address: \t%s\n", WiFi.macAddress().c_str());
-    TRACE("Hostname: \t%s\n", WiFi.getHostname());
-    TRACE("\n");
+    if (wifiinfo_out == 5)
+    {
+      TRACE("\n");
+      WiFi.printDiag(Serial);
+      TRACE("\n");
+      TRACE("WiFi SSID: \t%s\n", mssid);
+      TRACE("WiFi RSSI: \t%d dBm\n", WiFi.RSSI());
+      TRACE("Local ip: \t%s\n", WiFi.localIP().toString().c_str());
+      TRACE("Gateway ip: \t%s\n", WiFi.gatewayIP().toString().c_str());
+      TRACE("DNS ip: \t%s\n", WiFi.dnsIP().toString().c_str());
+      TRACE("Subnet mask: \t%s\n", WiFi.subnetMask().toString().c_str());
+      TRACE("MAC address: \t%s\n", WiFi.macAddress().c_str());
+      TRACE("Hostname: \t%s\n", WiFi.getHostname());
+      TRACE("\n");
+    }
+    else if (wifiinfo_out == 7)
+    {
+      TLNET(R"(
+    Connection Details:
+    ------------------
+    SSID       : %s
+    Hostname   : %s
+    IP-Address : %s
+    Gateway    : %s
+    DNS server : %s
+    MAC-Address: %s
+    RSSI       : %d
+    )",
+            WiFi.SSID().c_str(),
+            WiFi.getHostname(),
+            WiFi.localIP().toString().c_str(),
+            WiFi.gatewayIP().toString().c_str(),
+            WiFi.dnsIP().toString().c_str(),
+            WiFi.macAddress().c_str(),
+            WiFi.RSSI());
+      TLNET("\n");
+    }
   }
   else
   {
     TRACE("WiFi not connected\n");
   }
+  wifiinfo_out = 0;
 }
 
-void wfScan()
+void scanWiFi()
 {
   TRACE("Scan start\n");
   uint32_t scan_startime = millis();
@@ -405,33 +399,36 @@ void wfScan()
   WiFi.scanDelete();
 }
 
-void hwInfo()
+void infoChip(int chipinfo_out)
 {
-
-  uint32_t chipId = 0;
-  for (int i = 0; i < 17; i = i + 8)
-  {
-    chipId |= ((ESP.getEfuseMac() >> (40 - i)) & 0xff) << i;
-  }
-
-  TRACE("Chip ID: %d\n", chipId);
-  TRACE("Chip model: %s Rev %d\n", ESP.getChipModel(), ESP.getChipRevision());
-  TRACE("CPU has %d cores at %dMHz\n", ESP.getChipCores(), ESP.getCpuFreqMHz());
-  TRACE("Flash frequency is %dMHz\n", ESP.getFlashChipSpeed() / 1000000);
-  TRACE("Flash chip size: %d bytes\n", ESP.getFlashChipSize());
-
   uint32_t total_internal_memory = heap_caps_get_total_size(MALLOC_CAP_INTERNAL);
   uint32_t free_internal_memory = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
   uint32_t largest_contig_internal_block = heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL);
 
-  TRACE("Free  heap (internal memory) : %d bytes\n", esp_get_free_heap_size());
-  TRACE("Total DRAM (internal memory) : %d bytes\n", total_internal_memory);
-  TRACE("Free  DRAM (internal memory) : %d bytes\n", free_internal_memory);
-  TRACE("Largest free cont. DRAM block: %d bytes\n", largest_contig_internal_block);
-
-  // ESP_LOGI("Memory Info", "Total DRAM (internal memory): %" PRIu32 " bytes", total_internal_memory);
-  // ESP_LOGI("Memory Info", "Free DRAM (internal memory): %" PRIu32 " bytes", free_internal_memory);
-  // ESP_LOGI("Memory Info", "Largest free contiguous DRAM block: %" PRIu32 " bytes", largest_contig_internal_block);
+  if (chipinfo_out == 5) {
+    TRACE("Chip model: %s Rev %d\n", ESP.getChipModel(), ESP.getChipRevision());
+    TRACE("CPU has %d cores at %dMHz\n", ESP.getChipCores(), ESP.getCpuFreqMHz());
+    TRACE("Flash frequency is %dMHz\n", ESP.getFlashChipSpeed() / 1000000);
+    TRACE("Flash chip size: %d bytes\n", ESP.getFlashChipSize());
+    TRACE("Free  heap (internal memory) : %d bytes\n", esp_get_free_heap_size());
+    TRACE("Total DRAM (internal memory) : %d bytes\n", total_internal_memory);
+    TRACE("Free  DRAM (internal memory) : %d bytes\n", free_internal_memory);
+    TRACE("Largest free cont. DRAM block: %d bytes\n", largest_contig_internal_block);
+  } else if (chipinfo_out == 7) {
+    TLNET("Chip model: %s Rev %d\n", ESP.getChipModel(), ESP.getChipRevision());
+    TLNET("CPU has %d cores at %dMHz\n", ESP.getChipCores(), ESP.getCpuFreqMHz());
+    TLNET("Flash frequency is %dMHz\n", ESP.getFlashChipSpeed() / 1000000);
+    TLNET("Flash chip size: %d bytes\n", ESP.getFlashChipSize());
+    TLNET("Free  heap (internal memory) : %d bytes\n", esp_get_free_heap_size());
+    TLNET("Total DRAM (internal memory) : %d bytes\n", total_internal_memory);
+    TLNET("Free  DRAM (internal memory) : %d bytes\n", free_internal_memory);
+    TLNET("Largest free cont. DRAM block: %d bytes\n", largest_contig_internal_block);
+  } else {
+    String err_output("No chip info output specified! Arg is: \n");
+    TRACE("%s %d", err_output, chipinfo_out);
+    TLNET("%s %d", err_output, chipinfo_out);
+  }
+  chipinfo_out = 0;
 }
 
 void testButton()
@@ -453,7 +450,7 @@ void screenClockV0()
   lcd.printf("%s %s", getTimeStr(0), getTimeStr(8));
   lcd.setCursor(0, 1);
   lcd.printf("%s", ip.toString().c_str());
-  wfrxChar(15, 1);
+  indWiFiRx(15, 1);
   if (telnet.isConnected()) {
     lcd.setCursor(15, 0);
     lcd.print('T');
@@ -469,7 +466,7 @@ void screenClockV1()
   lcd.printf("%s %s", getTimeStr(1), getTimeStr(7));
   lcd.setCursor(0, 1);
   lcd.printf("%s", ip.toString().c_str());
-  wfrxChar(15, 1);
+  indWiFiRx(15, 1);
   if (telnet.isConnected()) {
     lcd.setCursor(15, 0);
     lcd.print('T');
@@ -517,7 +514,7 @@ void customChar()
   lcd.createChar(5, cChar5);
 }
 
-void wfrxChar(int col, int row)
+void indWiFiRx(int col, int row)
 {
   int rx = 0;
   if (WiFi.RSSI() > -60 && WiFi.RSSI() < 0)
@@ -668,6 +665,129 @@ String getTimeStr(int numStr)
   return timeStrRet;
 }
 
+void commSerial() {
+  if (Serial.available())
+  {
+    String comm_serial = Serial.readStringUntil('\n');
+    TRACE("[%s] > %s :\n", getTimeStr(0), comm_serial);
+    int comm_case_s = 0;
+    for (int i = 1; i < comm_qty; i++) 
+    { 
+      if (comm_array[i][0] == comm_serial) 
+      {
+        comm_case_s = i;
+        break;
+      }
+      else
+      {
+        comm_case_s = 0;
+      }
+    }
+
+    switch (comm_case_s)
+    {
+      case 0:
+        TRACE("%s \"%s\"\n", comm_err, comm_serial);
+        break;
+      case 1:
+        TRACE("%s %s\n", comm_about, build_date);
+        break;
+      case 2:
+        TRACE("%s\n", term_clear);
+        break;
+      case 3:
+        TRACE("%s %s !\n", comm_helo, client_ip.c_str());
+        break;
+      case 4:
+        TRACE("Pong!\n");
+        break;
+      case 5:
+       for (int j = 1; j < comm_qty; j++) {
+        TRACE("[ %d ] %s\t- %s\n", j, comm_array[j][0], comm_array[j][1].c_str()); }
+        break;
+      case 6:
+        infoWiFi(5); // 2do: telnet || serial output according to args
+        break;
+      case 7:
+        infoChip(5); // ag int: 5 - to Seial, 7 - to telnet
+        break;
+      case 8:
+        {TRACE("This command will stop serial, proceed? yes/no\n");
+        while (!Serial.available()) {
+          ;
+        }
+        String serial_switch = Serial.readStringUntil('\n');
+        if (serial_switch == "yes") {
+          TRACE("Serial will shut down\n");
+          delay(1000);
+          Serial.end();
+          serial_switch = "";
+        } else {
+          TRACE("Serial status unchanged\n");
+        } 
+        TRACE("(command under development)\n");}
+        break;
+      case 9:
+        TRACE("%s\n", getTimeStr(0));
+        break;
+      case 10:
+        TRACE("%s\n", getTimeStr(7));
+        break;
+      case 11:
+        if (!isConnected()) {
+          initWiFi(mssid, mpass, 20, 500);
+        } else {
+          TRACE("WiFi is already connected!\n");
+          infoWiFi(5);
+        }
+        break;
+      case 12:
+        if (isConnected()) {
+          WiFi.disconnect();
+          digitalWrite(LED_BUILTIN, LOW);
+          TRACE("WiFi disconnected\n");
+        } else {
+          TRACE("WiFi is already disconnected!\n");
+        }
+        break;
+      case 13:
+        scanWiFi();
+        break;
+      case 14:
+        TRACE("WiFi RSSI: %d dBm\n", WiFi.RSSI());
+        break;
+      case 15:
+        TRACE("%s\n", ESP.getChipModel());
+        break;
+      case 16:
+        TRACE("ESP restarting in 3 sec\n");
+        static int reboot_time = millis() + 3000;
+        while (millis() < reboot_time) {
+          TRACE(".");
+          delay(200);
+        }
+        ESP.restart();
+        break;
+      case 17:
+        TRACE("Starting soft reset MCU\n");
+        setup();
+        break;
+      case 18:
+        TRACE("Uptime counter coming soon...\n");
+        break;
+      case 19:
+        TRACE("LCD switch coming soon\n");
+        break;
+      case 20:
+        if (Serial) {
+          TRACE("Serial is already up!\n");
+        } else {
+          setupSerial();
+        }
+        break;
+    }
+  }
+}
 
 void setup()
 {
@@ -683,7 +803,7 @@ void setup()
   lcd.init(I2C_SDA, I2C_SCL); // initialize LCD(I2C pins)
   lcd.backlight();
   initWiFi(mssid, mpass, 20, 500);
-  wfInfo();
+  infoWiFi(5);
 
   if (isConnected())
   {
@@ -738,138 +858,9 @@ void setup()
 
 void loop(void)
 {
-  if (isConnected() /* && millis()%2000 < 10 */)
-  {
-    digitalWrite(ledBuiltIn, HIGH);
-  }
-  else
-  {
-    digitalWrite(ledBuiltIn, LOW);
-  }
-
   telnet.loop();
   readButton();
   execButton();
   testButton();
-
-  if (Serial.available())
-  {
-    String comm_serial = Serial.readStringUntil('\n');
-    TRACE("[%s] > %s :\n", getTimeStr(0), comm_serial);
-    int comm_case_s = 0;
-    for (int i = 1; i < comm_qty; i++) 
-    { 
-      if (comm_array[i][0] == comm_serial) 
-      {
-        comm_case_s = i;
-        break;
-      }
-      else
-      {
-        comm_case_s = 0;
-      }
-    }
-
-    switch (comm_case_s)
-    {
-      case 0:
-        TRACE("%s \"%s\"\n", comm_err, comm_serial);
-        break;
-      case 1:
-        TRACE("%s %s\n", comm_about, build_date);
-        break;
-      case 2:
-        TRACE("%s\n", term_clear);
-        break;
-      case 3:
-        TRACE("%s %s !\n", comm_helo, client_ip.c_str());
-        break;
-      case 4:
-        TRACE("Pong!\n");
-        break;
-      case 5:
-       for (int j = 1; j < comm_qty; j++) {
-        TRACE("[ %d ] %s - \t%s\n", j, comm_array[j][0], comm_array[j][1].c_str()); }
-        break;
-      case 6:
-        wfInfo(); // 2do: telnet || serial output according to args
-        break;
-      case 7:
-        hwInfo(); // 2do: telnet || serial output according to args
-        break;
-      case 8:
-        {TRACE("This command will stop serial, proceed? yes/no\n");
-        while (!Serial.available()) {
-          ;
-        }
-        String serial_switch = Serial.readStringUntil('\n');
-        if (serial_switch == "yes") {
-          TRACE("Serial will shut down\n");
-          delay(1000);
-          Serial.end();
-          serial_switch = "";
-        } else {
-          TRACE("Serial status unchanged\n");
-        } 
-        TRACE("(command under development)\n");}
-        break;
-      case 9:
-        TRACE("%s\n", getTimeStr(0));
-        break;
-      case 10:
-        TRACE("%s\n", getTimeStr(7));
-        break;
-      case 11:
-        if (!isConnected()) {
-          initWiFi(mssid, mpass, 20, 500);
-        } else {
-          TRACE("WiFi is already connected!\n");
-          wfInfo();
-        }
-        break;
-      case 12:
-        if (isConnected()) {
-          WiFi.disconnect();
-          TRACE("WiFi disconnected\n");
-        } else {
-          TRACE("WiFi is already disconnected!\n");
-        }
-        break;
-      case 13:
-        wfScan();
-        break;
-      case 14:
-        TRACE("WiFi RSSI: %d dBm\n", WiFi.RSSI());
-        break;
-      case 15:
-        TRACE("%s\n", ESP.getChipModel());
-        break;
-      case 16:
-        TRACE("ESP restarting in 3 sec\n");
-        static int reboot_time = millis() + 3000;
-        while (millis() < reboot_time) {
-          TRACE(".");
-          delay(200);
-        }
-        ESP.restart();
-        break;
-      case 17:
-        TRACE("Starting soft reset MCU\n");
-        setup();
-        break;
-      case 18:
-        TRACE("Uptime counter coming soon...\n");
-        break;
-      case 19:
-        TRACE("LCD switch coming soon\n");
-        break;
-      case 20:
-        if (Serial) {
-          TRACE("Serial is up!\n");
-        } else {
-          setupSerial();
-        }
-        break;
-    }
-  }
+  commSerial();
 }
