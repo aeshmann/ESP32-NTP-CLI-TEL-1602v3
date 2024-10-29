@@ -2,7 +2,7 @@
 
 const char* build_date = __DATE__ " " __TIME__;
 const char* term_clear = "\033[2J\033[H";
-const int comm_qty = 21;
+const int comm_qty = 22;
 const String comm_array[][2]{
     {"", "error"},                           // 0
     {"abt", "information about chip"},       // 1
@@ -25,6 +25,7 @@ const String comm_array[][2]{
     {"utime", "prints uptime"},              // 18
     {"lcdsw", "switch LCD on/off"},          // 19
     {"comon", "launch setup Serial"},        // 20
+    {"testb", "seial show btn arr output"}   // 21
 };
 
 const char* comm_about =

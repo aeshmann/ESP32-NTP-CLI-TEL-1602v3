@@ -19,14 +19,17 @@ I2C device found at address 0x27 // LCD
 #define I2C_SDA 10
 #define I2C_SCL 11
 
+#define RXD1 18
+#define TXD1 17
+
 #define TIMEZONE "MSK-3"                      // local time zone definition (Moscow)
 #define TRACE(...) Serial.printf(__VA_ARGS__) // Serial output simplified
 #define TLNET(...) telnet.printf(__VA_ARGS__) // Telnet output simplified
 
-#define pinBtn0 17
-#define pinBtn1 18
-#define pinBtn2 19
-#define pinBtn3 20
+#define pinBtn0 35
+#define pinBtn1 36
+#define pinBtn2 37
+#define pinBtn3 38
 #define ledBuiltIn 2
 #define RGB_LED_PIN 48
 #define NUM_RGB_LEDS 1 // number of RGB LEDs (assuming 1 WS2812 LED)
@@ -41,14 +44,15 @@ const char *mpass = "43v3ry0nG";
 IPAddress ip;
 uint16_t port = 23;
 String client_ip;
-int serial_speed = 115200;
-int key0, key1, key2, key3;
-int keyArray[4]{key0, key1, key2, key3};
-int readButton(bool, bool, bool, bool);
+const int serial_speed = 115200;
+int keyArray[4]{};
+
 
 bool initWiFi(const char *, const char *, int, int);
 bool isConnected();
-void setupSerial();
+
+void setupSerial(int);
+
 void setupTelnet();
 void errorMsg(String, bool);
 void onTelnetConnect(String ip);
@@ -57,12 +61,12 @@ void onTelnetReconnect(String ip);
 void onTelnetConnectionAttempt(String ip);
 void onTelnetInput(String str);
 
+void screenDraw(String, String);
 String getTimeStr(int);
-void customChar();
-void testButton();
+
+int readButton(bool, bool, bool, bool);
+void testButton(int);
 void execButton();
-void screenClockV0();
-void screenClockV1();
 
 void indWiFiRx(int, int);
 void commSerial();
@@ -76,7 +80,6 @@ void loop();
 ESPTelnet telnet;
 LiquidCrystal_I2C lcd(0x27, 16, 2); // LCD i2c
 Adafruit_NeoPixel rgb_led = Adafruit_NeoPixel(NUM_RGB_LEDS, RGB_LED_PIN, NEO_GRB + NEO_KHZ800);
-
 
 
 bool initWiFi(const char *mssid, const char *mpass,
@@ -120,15 +123,35 @@ void errorMsg(String error, bool restart = true)
   }
 }
 
-void setupSerial()
+
+void setupSerial(int uart_num)
 {
-  Serial.begin(115200);
-  while (!Serial)
+  if (uart_num == 0)
   {
-    ;
-  };
-  delay(200);
-  TRACE("Serial running\n");
+    Serial.begin(serial_speed);
+    while (!Serial)
+    {
+      ;
+    };
+    delay(100);
+    TRACE("Serial0 running\n");
+    return;
+  }
+  else if (uart_num == 1)
+  {
+    Serial1.begin(serial_speed, SERIAL_8N1, RXD1, TXD1);
+    while (!Serial1)
+    {
+      ;
+    };
+    delay(100);
+    TRACE("Serial1 running\n");
+    return;
+  }
+  else
+  {
+    return;
+  }
 }
 
 void setupTelnet()
@@ -264,18 +287,21 @@ void onTelnetInput(String comm_telnet)
     setup();
     break;
   case 18:
-    TLNET("Uptime counter coming soon...\n");
+    TLNET("Uptime counter not implemented yet\n");
     break;
   case 19:
-    TLNET("LCD switch coming soon...\n");
+    TLNET("LCD backlight switch not implemented yet\n");
     break;
   case 20:
     if (!Serial) {
       TLNET("Starting setup Serial\n");
-      setupSerial();
+      setupSerial(0);
     } else {
       TLNET("Serial is already up!\n");
     }
+    break;
+  case 21:
+    testButton(7);
     break;
   }
 }
@@ -431,41 +457,23 @@ void infoChip(int chipinfo_out)
   chipinfo_out = 0;
 }
 
-void testButton()
+void testButton(int bttntest_out)
 {
-  static int btn_test_timer;
-  int btn_test_period = 500;
-  if (millis() == btn_test_timer + btn_test_period)
-  {
-    TRACE("BTN: %d, %d, %d, %d \n", keyArray[0], keyArray[1], keyArray[2], keyArray[3]);
-    btn_test_timer = millis();
-  }
-
-
+    if (bttntest_out == 5) {
+      TRACE("BTN: %d, %d, %d, %d \n", keyArray[0], keyArray[1], keyArray[2], keyArray[3]);
+    } else if (bttntest_out == 7) {
+      TLNET("BTN: %d, %d, %d, %d \n", keyArray[0], keyArray[1], keyArray[2], keyArray[3]);
+    } else {
+      return;
+    }
 }
 
-void screenClockV0()
-{
+void screenDraw(String lcdRow0, String lcdRow1) {
   lcd.setCursor(0, 0);
-  lcd.printf("%s %s", getTimeStr(0), getTimeStr(8));
+  lcd.printf("%s", lcdRow0.c_str());
   lcd.setCursor(0, 1);
-  lcd.printf("%s", ip.toString().c_str());
-  indWiFiRx(15, 1);
-  if (telnet.isConnected()) {
-    lcd.setCursor(15, 0);
-    lcd.print('T');
-  } else {
-    lcd.setCursor(15, 0);
-    lcd.print(' ');
-  }
-}
+  lcd.printf("%s", lcdRow1.c_str());
 
-void screenClockV1()
-{
-  lcd.setCursor(0, 0);
-  lcd.printf("%s %s", getTimeStr(1), getTimeStr(7));
-  lcd.setCursor(0, 1);
-  lcd.printf("%s", ip.toString().c_str());
   indWiFiRx(15, 1);
   if (telnet.isConnected()) {
     lcd.setCursor(15, 0);
@@ -504,16 +512,6 @@ int readButton(bool btn0 = !digitalRead(pinBtn0),
   return keyArray[4];
 }
 
-void customChar()
-{
-  lcd.createChar(0, cChar0);
-  lcd.createChar(1, cChar1);
-  lcd.createChar(2, cChar2);
-  lcd.createChar(3, cChar3);
-  lcd.createChar(4, cChar4);
-  lcd.createChar(5, cChar5);
-}
-
 void indWiFiRx(int col, int row)
 {
   int rx = 0;
@@ -541,21 +539,29 @@ void execButton()
   {
     switch (keyArray[0])
     {
-    case 0:
-      screenClockV0();
+    case 0: {
+      String lcdRowStr0(getTimeStr(0) + " " + getTimeStr(8));
+      String lcdRowStr1(WiFi.localIP().toString().c_str());
+      screenDraw(lcdRowStr0, lcdRowStr1);
+    }
       break;
-    case 1:
-      screenClockV1();
+    case 1: {
+      String lcdRowStr0(getTimeStr(1) + " " + getTimeStr(7));
+      String lcdRowStr1(WiFi.localIP().toString().c_str());
+      screenDraw(lcdRowStr0, lcdRowStr1);
+    }
       break;
-    case 2:
-      lcd.clear();
-      lcd.setCursor(3, 0);
-      lcd.printf("Btn0.case2");
+    case 2: {
+      String lcdRowStr0("BTN.0 Case 2.R0");
+      String lcdRowStr1("BTN.0 Case 2.R1");
+      screenDraw(lcdRowStr0, lcdRowStr1);
+    }
       break;
-    case 3:
-      lcd.clear();
-      lcd.setCursor(3, 0);
-      lcd.printf("Btn0.case3");
+    case 3: {
+      String lcdRowStr0("BTN.0 Case 3.R0");
+      String lcdRowStr1("BTN.0 Case 3.R1");
+      screenDraw(lcdRowStr0, lcdRowStr1);
+    }
       break;
     case 4:
       keyArray[0] = 0;
@@ -612,7 +618,7 @@ void execButton()
 
   switch (keyArray[3])
   {
-      case 0:
+  case 0:
     lcd.setBacklight(1);
     break;
   case 1:
@@ -652,7 +658,7 @@ String getTimeStr(int numStr)
     strftime(timeStrRet, 32, "%a %d %h", timeinfo); // Thu 23 Aug
     break;
   case 7:
-    strftime(timeStrRet, 32, "%d.%m.%C", timeinfo); // 23.08.24
+    strftime(timeStrRet, 32, "%d.%m.%g", timeinfo); // 23.08.24
     break;
   case 8:
     strftime(timeStrRet, 32, "%d.%m", timeinfo); // 23.08
@@ -773,21 +779,25 @@ void commSerial() {
         setup();
         break;
       case 18:
-        TRACE("Uptime counter coming soon...\n");
+        TRACE("Uptime counter not implemented yet\n");
         break;
       case 19:
-        TRACE("LCD switch coming soon\n");
+        TRACE("LCD backlight switch not implemented yet\n");
         break;
       case 20:
         if (Serial) {
           TRACE("Serial is already up!\n");
         } else {
-          setupSerial();
+          setupSerial(0);
         }
+        break;
+      case 21:
+        testButton(5);
         break;
     }
   }
 }
+
 
 void setup()
 {
@@ -798,7 +808,8 @@ void setup()
   pinMode(ledBuiltIn, OUTPUT);
   digitalWrite(ledBuiltIn, HIGH);
 
-  setupSerial();
+  setupSerial(0);
+  setupSerial(1);
 
   lcd.init(I2C_SDA, I2C_SCL); // initialize LCD(I2C pins)
   lcd.backlight();
@@ -843,7 +854,12 @@ void setup()
   }
   TRACE("\n");
 
-  customChar();
+  lcd.createChar(0, cChar0);
+  lcd.createChar(1, cChar1);
+  lcd.createChar(2, cChar2);
+  lcd.createChar(3, cChar3);
+  lcd.createChar(4, cChar4);
+  lcd.createChar(5, cChar5);
 
   for (int i = 0; i < 5; i++)
   {
@@ -861,6 +877,5 @@ void loop(void)
   telnet.loop();
   readButton();
   execButton();
-  testButton();
   commSerial();
 }
