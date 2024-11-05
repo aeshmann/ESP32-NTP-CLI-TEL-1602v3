@@ -9,6 +9,7 @@ I2C device found at address 0x27 // LCD
 
 #include <Wire.h>
 #include <WIFi.h>
+#include <SHT85.h>
 #include <Arduino.h>
 #include <ESPTelnet.h>
 #include <LiquidCrystal_I2C.h>
@@ -33,6 +34,7 @@ I2C device found at address 0x27 // LCD
 #define ledBuiltIn 2
 #define RGB_LED_PIN 48
 #define NUM_RGB_LEDS 1 // number of RGB LEDs (assuming 1 WS2812 LED)
+#define SHT85_ADDRESS 0x44
 
 const char *ntpHost0 = "0.ru.pool.ntp.org";
 const char *ntpHost1 = "1.ru.pool.ntp.org";
@@ -47,7 +49,7 @@ String client_ip;
 const int serial_speed = 115200;
 int keyArray[4]{};
 bool backLight = true;
-String startup_time;
+String boot_timestamp;
 time_t boot_time;
 
 bool initWiFi(const char *, const char *, int, int);
@@ -64,6 +66,7 @@ void onTelnetInput(String str);
 
 void screenDraw(String, String);
 String getTimeStr(int);
+String getSensVal(char);
 String uptimeCount();
 void lcdBackLight(bool);
 int readButton(bool, bool, bool, bool);
@@ -77,6 +80,7 @@ void infoChip(int);
 void scanWiFi();
 
 ESPTelnet telnet;
+SHT85 sht(SHT85_ADDRESS);
 LiquidCrystal_I2C lcd(0x27, 16, 2); // LCD i2c
 Adafruit_NeoPixel rgb_led = Adafruit_NeoPixel(NUM_RGB_LEDS, RGB_LED_PIN, NEO_GRB + NEO_KHZ800);
 
@@ -344,6 +348,7 @@ void onTelnetInput(String comm_telnet)
   }
   case 18:
   {
+    TLNET("System start: %s\n", boot_timestamp);
     TLNET("Uptime: %s\n", uptimeCount().c_str());
     break;
   }
@@ -750,6 +755,28 @@ String getTimeStr(int numStr)
   return timeStrRet;
 }
 
+String getSensVal(char valSelact) {
+  static uint32_t sens_timer;
+  uint32_t sens_period = 1000;
+  float sens_temperature;
+  float sens_relhumidity;
+  String errorStr("err");
+  do {
+    sens_temperature = sht.getTemperature();
+    sens_relhumidity = sht.getHumidity();
+    sens_timer = millis();
+  } while (millis() >= sens_timer + sens_period);
+  String sensTempStr = String(sens_temperature, 1);
+  String sensHumidStr = String(sens_relhumidity, 1);
+  if (valSelact == 't') {
+    return sensTempStr;
+  } else if (valSelact == 'h') {
+    return sensHumidStr;
+  } else {
+    return errorStr;
+  }
+}
+
 void commSerial()
 {
   if (Serial.available())
@@ -909,6 +936,7 @@ void commSerial()
     break;
     case 18:
     {
+      TRACE("System start: %s\n", boot_timestamp);
       TRACE("Uptime: %s\n", uptimeCount().c_str());
       break;
     }
@@ -982,6 +1010,23 @@ void setup()
   configTzTime(TIMEZONE, ntpHost0, ntpHost1, ntpHost2);
   TRACE("Done.\n");
 
+  TRACE("Setting up SHT30 sensor\n");
+  Serial.println(__FILE__);
+  Serial.print("SHT_LIB_VERSION: \t");
+  Serial.println(SHT_LIB_VERSION);
+
+  sht.begin();
+  uint16_t stat = sht.readStatus();
+  Serial.print(stat, HEX);
+  Serial.println();
+  delay(500);
+  TRACE("Sensor SHT30 set\n");
+
+  uint32_t ser = sht.GetSerialNumber();
+  Serial.print(ser, HEX);
+  Serial.println();
+  delay(1000);
+
   for (int i = 0; i < 40; i++)
   {
     TRACE("%c", '*');
@@ -1020,7 +1065,7 @@ void setup()
   }
   lcd.clear();
 
-  startup_time = getTimeStr(0) + getTimeStr(6);
+  boot_timestamp = getTimeStr(0) + getTimeStr(6);
   boot_time = time(nullptr);
 
   TRACE("\nGuru meditates...\nESP32 Ready.\n");
@@ -1032,4 +1077,19 @@ void loop(void)
   readButton();
   execButton();
   commSerial();
+  static uint32_t start, stop;
+  static int sht_timer;
+  int sht_period = 2000;
+  if (millis() >= (sht_timer + sht_period))
+  {
+    sht_timer = millis();
+    start = micros();
+    sht.read(); //  default = true/fast       slow = false
+    stop = micros();
+    float lasted = (stop - start) * 0.001;
+
+    TRACE("\t%.2f\t%.1f\t%.1f\n", lasted, sht.getTemperature(), sht.getHumidity());
+    TRACE("Temp string: %s\n", getSensVal('t'));
+    TRACE("Humid string: %s\n", getSensVal('h'));
+  }
 }
