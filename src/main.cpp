@@ -71,6 +71,8 @@ String uptimeCount();
 void lcdBackLight(bool);
 int readButton(bool, bool, bool, bool);
 void testButton(int);
+void readSensor(int);
+void testSensor();
 void execButton();
 
 void indWiFiRx(int, int);
@@ -348,7 +350,7 @@ void onTelnetInput(String comm_telnet)
   }
   case 18:
   {
-    TLNET("System start: %s\n", boot_timestamp);
+    TLNET("System start: %s\n", boot_timestamp.c_str());
     TLNET("Uptime: %s\n", uptimeCount().c_str());
     break;
   }
@@ -386,6 +388,16 @@ void onTelnetInput(String comm_telnet)
   {
     testButton(7);
     break;
+  }
+  case 22:
+  {
+    testSensor();
+    TLNET("Data sent to Serial\n");
+    break;
+  }
+  case 23:
+  {
+    TLNET("%sC %s%%\n", getSensVal('t'), getSensVal('h'));
   }
   }
 }
@@ -636,14 +648,14 @@ void execButton()
     }
       break;
     case 2: {
-      String lcdRowStr0("BTN.0 Case 2.R0");
-      String lcdRowStr1("BTN.0 Case 2.R1");
+      String lcdRowStr0(getTimeStr(0) + " " + getTimeStr(8));
+      String lcdRowStr1("  " + getSensVal('t') + 'C' + " " + getSensVal('h') + '%');
       screenDraw(lcdRowStr0, lcdRowStr1);
     }
       break;
     case 3: {
-      String lcdRowStr0("BTN.0 Case 3.R0");
-      String lcdRowStr1("BTN.0 Case 3.R1");
+      String lcdRowStr0(getTimeStr(1) + " " + getTimeStr(7));
+      String lcdRowStr1("  " + getSensVal('t') + 'C' + " " + getSensVal('h') + '%');
       screenDraw(lcdRowStr0, lcdRowStr1);
     }
       break;
@@ -745,7 +757,7 @@ String getTimeStr(int numStr)
     strftime(timeStrRet, 32, "%d.%m.%g", timeinfo); // 23.08.24
     break;
   case 8:
-    strftime(timeStrRet, 32, "%d.%m", timeinfo); // 23.08
+    strftime(timeStrRet, 32, "%d %h", timeinfo); // 23 Aug
     break;
   case 9:
     strftime(timeStrRet, 32, "%c", timeinfo); // Thu Aug 23 14:55:02 2001
@@ -756,16 +768,11 @@ String getTimeStr(int numStr)
 }
 
 String getSensVal(char valSelact) {
-  static uint32_t sens_timer;
-  uint32_t sens_period = 1000;
   float sens_temperature;
   float sens_relhumidity;
   String errorStr("err");
-  do {
-    sens_temperature = sht.getTemperature();
-    sens_relhumidity = sht.getHumidity();
-    sens_timer = millis();
-  } while (millis() >= sens_timer + sens_period);
+  sens_temperature = sht.getTemperature();
+  sens_relhumidity = sht.getHumidity();
   String sensTempStr = String(sens_temperature, 1);
   String sensHumidStr = String(sens_relhumidity, 1);
   if (valSelact == 't') {
@@ -936,7 +943,7 @@ void commSerial()
     break;
     case 18:
     {
-      TRACE("System start: %s\n", boot_timestamp);
+      TRACE("System start: %s\n", boot_timestamp.c_str());
       TRACE("Uptime: %s\n", uptimeCount().c_str());
       break;
     }
@@ -973,7 +980,44 @@ void commSerial()
       testButton(5);
       break;
     }
+    case 22:
+    {
+      testSensor();
+      break;
     }
+    case 23:
+    {
+      TRACE("%sC %s%%\n", getSensVal('t'), getSensVal('h'));
+    }
+    }
+  }
+}
+
+void testSensor()
+{
+  static uint32_t start, stop;
+  static int sht_timer;
+  int sht_period = 2000;
+  if (millis() >= (sht_timer + sht_period))
+  {
+    sht_timer = millis();
+    start = micros();
+    sht.read(); //  default = true/fast       slow = false
+    stop = micros();
+    float lasted = (stop - start) * 0.001;
+    
+    TRACE("SHT 30: %.2f ms\t%.1f C\t%.1f %%\n", lasted, sht.getTemperature(), sht.getHumidity());
+    TRACE("Temp string: %s\n", getSensVal('t'));
+    TRACE("Humid string: %s\n", getSensVal('h'));
+    TRACE("Wire clock: %d\n", Wire.getClock());
+  }
+}
+
+void readSensor(int readPeriod) {
+  static int readTimer;
+  if (millis() >= readTimer + readPeriod) {
+    sht.read();
+    readTimer = millis();
   }
 }
 
@@ -1011,21 +1055,13 @@ void setup()
   TRACE("Done.\n");
 
   TRACE("Setting up SHT30 sensor\n");
-  Serial.println(__FILE__);
-  Serial.print("SHT_LIB_VERSION: \t");
-  Serial.println(SHT_LIB_VERSION);
-
+  TRACE("SHT_LIB_VERSION: %s\t", SHT_LIB_VERSION);
+  
   sht.begin();
-  uint16_t stat = sht.readStatus();
-  Serial.print(stat, HEX);
-  Serial.println();
-  delay(500);
+  delay(200);
+  
   TRACE("Sensor SHT30 set\n");
-
-  uint32_t ser = sht.GetSerialNumber();
-  Serial.print(ser, HEX);
-  Serial.println();
-  delay(1000);
+  testSensor();
 
   for (int i = 0; i < 40; i++)
   {
@@ -1065,7 +1101,7 @@ void setup()
   }
   lcd.clear();
 
-  boot_timestamp = getTimeStr(0) + getTimeStr(6);
+  boot_timestamp = getTimeStr(0) + ' ' + getTimeStr(6);
   boot_time = time(nullptr);
 
   TRACE("\nGuru meditates...\nESP32 Ready.\n");
@@ -1073,23 +1109,12 @@ void setup()
 
 void loop(void)
 {
+  int readPeriod = 5000;
   telnet.loop();
   readButton();
   execButton();
   commSerial();
-  static uint32_t start, stop;
-  static int sht_timer;
-  int sht_period = 2000;
-  if (millis() >= (sht_timer + sht_period))
-  {
-    sht_timer = millis();
-    start = micros();
-    sht.read(); //  default = true/fast       slow = false
-    stop = micros();
-    float lasted = (stop - start) * 0.001;
-
-    TRACE("\t%.2f\t%.1f\t%.1f\n", lasted, sht.getTemperature(), sht.getHumidity());
-    TRACE("Temp string: %s\n", getSensVal('t'));
-    TRACE("Humid string: %s\n", getSensVal('h'));
-  }
+  readSensor(readPeriod);
+  //testSensor();
 }
+
