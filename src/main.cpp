@@ -54,32 +54,31 @@ time_t boot_time;
 
 bool initWiFi(const char *, const char *, int, int);
 bool isConnected();
+String infoWiFi();
+String scanWiFi();
+void rssiWiFi(int, int);
 
 void setupSerial(int);
 void setupTelnet();
-void errorMsg(String, bool);
+
 void onTelnetConnect(String ip);
 void onTelnetDisconnect(String ip);
 void onTelnetReconnect(String ip);
 void onTelnetConnectionAttempt(String ip);
 void onTelnetInput(String str);
-
+void errorMsg(String, bool);
 void screenDraw(String, String);
 String getTimeStr(int);
 String getSensVal(char);
 String uptimeCount();
+String infoChip();
 void lcdBackLight(bool);
 int readButton(bool, bool, bool, bool);
 void testButton(int);
 void readSensor(int);
 void testSensor();
 void execButton();
-
-void indWiFiRx(int, int);
 void commSerial();
-void infoWiFi(int);
-void infoChip(int);
-void scanWiFi();
 
 ESPTelnet telnet;
 SHT85 sht(SHT85_ADDRESS);
@@ -106,14 +105,139 @@ bool initWiFi(const char *mssid, const char *mpass,
   TRACE("\nConnected!\n");
   WiFi.setAutoReconnect(true);
   WiFi.persistent(true);
-  //digitalWrite(LED_BUILTIN, HIGH);
-  infoWiFi(5);
   return isConnected();
 }
 
 bool isConnected()
 {
   return (WiFi.status() == WL_CONNECTED);
+}
+
+String infoWiFi() {
+  String wfinf("");
+  if (isConnected()) {
+    wfinf += "WiFi SSID: ";
+    wfinf += WiFi.SSID();
+    wfinf += " (ch ";
+    wfinf += WiFi.channel();
+    wfinf += ")\n";
+    wfinf += "WiFi RSSI: ";
+    wfinf += WiFi.RSSI();
+    wfinf += "dBm\n";
+    wfinf += "Local ip: ";
+    wfinf += WiFi.localIP().toString();
+    wfinf += '\n';
+  } else {
+    wfinf += "WiFi not connected\n";
+  }
+  return wfinf;
+}
+
+String scanWiFi() {
+  String scanResult(' ');
+  uint32_t scan_start = millis();
+  int n = WiFi.scanNetworks();
+  uint32_t scan_elapse = millis() - scan_start;
+  if (n == 0) {
+   scanResult += "No networks found";
+  } else {
+  scanResult += n;
+  scanResult += " networks found for ";
+  scanResult += scan_elapse;
+  scanResult+= "ms at ";
+  scanResult += getTimeStr(0).c_str();
+  scanResult += '\n';
+  int lengthMax = 0;
+  for (int l = 0; l < n; l++) {
+    if (WiFi.SSID(l).length() >= lengthMax) {
+      lengthMax = WiFi.SSID(l).length();
+    }
+  }
+  scanResult += " Nr |";
+  scanResult +=  " SSID";
+  String spaceStr = "";
+  for (int m = 0; m < lengthMax - 3; m++) {
+    spaceStr += ' ';
+  }
+  scanResult += spaceStr;
+  scanResult += "|RSSI | CH | Encrypt\n";
+  for (int i = 0; i < n; i++) {
+    scanResult += ' ';
+    if (i < 9) {
+      scanResult += '0';
+    }
+    scanResult += i + 1;
+    scanResult += " | ";
+    int lengthAdd = lengthMax - WiFi.SSID(i).length();
+    String cmStr = "";
+    for (int k = 0; k < lengthAdd; k++) {
+      cmStr += ' ';
+    }
+    scanResult += WiFi.SSID(i).c_str();
+    scanResult += cmStr;
+    scanResult += " | ";
+    scanResult += WiFi.RSSI(i);
+    scanResult += " | ";
+    scanResult += WiFi.channel(i);
+    if (WiFi.channel(i) < 10) {
+      scanResult += ' ';
+    }
+    scanResult += " | ";
+    switch (WiFi.encryptionType(i)) {
+      case WIFI_AUTH_OPEN:
+      scanResult += "open";
+      break;
+      case WIFI_AUTH_WEP:
+      scanResult += "WEP";
+      break;
+      case WIFI_AUTH_WPA_PSK:
+      scanResult += "WPA";
+      break;
+      case WIFI_AUTH_WPA2_PSK:
+      scanResult += "WPA2";
+      break;
+      case WIFI_AUTH_WPA_WPA2_PSK:
+      scanResult += "WPA+WPA2";
+      break;
+      case WIFI_AUTH_WPA2_ENTERPRISE:
+      scanResult += "WPA2-EAP";
+      break;
+      case WIFI_AUTH_WPA3_PSK:
+      scanResult += "WPA3";
+      break;
+      case WIFI_AUTH_WPA2_WPA3_PSK:
+      scanResult += "WPA2+WPA3";
+      break;
+      case WIFI_AUTH_WAPI_PSK:
+      scanResult += "WAPI";
+      break;
+      default:
+      scanResult += "unk";
+    }
+    scanResult += '\n';
+    delay(10);
+  }
+ }
+ return scanResult;
+}
+
+void rssiWiFi(int col, int row)
+{
+  int rx = 0;
+  if (WiFi.RSSI() > -60 && WiFi.RSSI() < 0)
+    rx = 4;
+  else if (WiFi.RSSI() <= -60)
+    rx = 3;
+  else if (WiFi.RSSI() <= -80)
+    rx = 2;
+  else if (WiFi.RSSI() <= -90)
+    rx = 1;
+  else if (WiFi.RSSI() == 0)
+    rx = 5;
+  else
+    rx = 0;
+  lcd.setCursor(col, row);
+  lcd.write(rx);
 }
 
 void errorMsg(String error, bool restart = true)
@@ -169,6 +293,56 @@ String uptimeCount() {
 
   String uptimeStr(String(uptime_dd) + " days " + String(uptime_hh) + " hours " + String(uptime_mm) + " minutes " + String(uptime_ss) + " seconds");
   return uptimeStr;
+}
+
+String infoChip() {
+  uint32_t total_internal_memory = heap_caps_get_total_size(MALLOC_CAP_INTERNAL);
+  uint32_t free_internal_memory = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
+  String infoChipStr[8];
+
+  infoChipStr[0] += "Chip:";
+  infoChipStr[0] += ESP.getChipModel();
+  infoChipStr[0] += " R";
+  infoChipStr[0] += ESP.getChipRevision();
+  
+  infoChipStr[1] += "CPU :";
+  infoChipStr[1] += ESP.getChipCores();
+  infoChipStr[1] += " cores @ ";
+  infoChipStr[1] += ESP.getCpuFreqMHz();
+  infoChipStr[1] += "MHz";
+  
+  infoChipStr[2] += "Flash frequency ";
+  infoChipStr[2] += ESP.getFlashChipSpeed() / 1000000;
+  infoChipStr[2] += "MHz";
+
+  infoChipStr[3] += "Flash size: ";
+  infoChipStr[3] += ESP.getFlashChipSize() * 0.001;
+  infoChipStr[3] += "kb";
+
+  infoChipStr[4] += "Flash size: ";
+  infoChipStr[4] += ESP.getFlashChipSize() / 1024;
+  infoChipStr[4] += " kib";
+
+  infoChipStr[5] += "Free  heap: ";
+  infoChipStr[5] += esp_get_free_heap_size() * 0.001;
+  infoChipStr[5] += " kb";
+
+  infoChipStr[6] += "Free  DRAM: ";
+  infoChipStr[6] += free_internal_memory * 0.001;
+  infoChipStr[6] += " kb";
+
+  infoChipStr[7] += "Total DRAM: ";
+  infoChipStr[7] += total_internal_memory * 0.001;
+  infoChipStr[7] += " kb";
+
+  String infoChipAll = "";
+  for (int i = 0; i < 8; i++) {
+    infoChipAll += i + 1;
+    infoChipAll += ". ";
+    infoChipAll += infoChipStr[i];
+    infoChipAll += '\n';
+  }
+  return infoChipAll;
 }
 
 void lcdBackLight(bool backLight) {
@@ -282,12 +456,12 @@ void onTelnetInput(String comm_telnet)
   }
   case 6:
   {
-    infoWiFi(7);
+    TLNET("%s\n", infoWiFi().c_str());
     break;
   }
   case 7:
   {
-    infoChip(7);
+    TLNET("%s\n", infoChip().c_str());
     break;
   }
   case 8:
@@ -309,17 +483,18 @@ void onTelnetInput(String comm_telnet)
   }
   case 11:
   {
-    TRACE("Turning WiFi on/off unavaliable on telnet session\n");
+    TLNET("Turning WiFi on/off unavaliable on telnet session\n");
     break;
   }
   case 12:
   {
-    TRACE("Turning WiFi on/off unavaliable on telnet session\n");
+    TLNET("Turning WiFi on/off unavaliable on telnet session\n");
     break;
   }
   case 13:
   {
-    TRACE("WiFi scan fuction over telnet coming soon\n");
+    //TLNET("WiFi scan started [%s]\n", getTimeStr(0).c_str());
+    TLNET("%s\n", scanWiFi().c_str());
     break;
   }
   case 14:
@@ -402,157 +577,6 @@ void onTelnetInput(String comm_telnet)
   }
 }
 
-void infoWiFi(int wifiinfo_out)
-{
-  if (isConnected())
-  {
-    if (wifiinfo_out == 5)
-    {
-      TRACE("\n");
-      WiFi.printDiag(Serial);
-      TRACE("\n");
-      TRACE("WiFi SSID: \t%s\n", mssid);
-      TRACE("WiFi RSSI: \t%d dBm\n", WiFi.RSSI());
-      TRACE("Local ip: \t%s\n", WiFi.localIP().toString().c_str());
-      TRACE("Gateway ip: \t%s\n", WiFi.gatewayIP().toString().c_str());
-      TRACE("DNS ip: \t%s\n", WiFi.dnsIP().toString().c_str());
-      TRACE("Subnet mask: \t%s\n", WiFi.subnetMask().toString().c_str());
-      TRACE("MAC address: \t%s\n", WiFi.macAddress().c_str());
-      TRACE("Hostname: \t%s\n", WiFi.getHostname());
-      TRACE("\n");
-    }
-    else if (wifiinfo_out == 7)
-    {
-      TLNET(R"(
-    Connection Details:
-    ------------------
-    SSID       : %s
-    Hostname   : %s
-    IP-Address : %s
-    Gateway    : %s
-    DNS server : %s
-    MAC-Address: %s
-    RSSI       : %d
-    )",
-            WiFi.SSID().c_str(),
-            WiFi.getHostname(),
-            WiFi.localIP().toString().c_str(),
-            WiFi.gatewayIP().toString().c_str(),
-            WiFi.dnsIP().toString().c_str(),
-            WiFi.macAddress().c_str(),
-            WiFi.RSSI());
-      TLNET("\n");
-    }
-  }
-  else
-  {
-    TRACE("WiFi not connected\n");
-  }
-  wifiinfo_out = 0;
-}
-
-void scanWiFi()
-{
-  TRACE("Scan start\n");
-  uint32_t scan_startime = millis();
-  // WiFi.scanNetworks will return the number of networks found.
-  int n = WiFi.scanNetworks();
-  uint32_t scan_duration = millis() - scan_startime;
-  float scan_seconds = scan_duration/1000;
-  TRACE("Scan done in %.2f seconds\n", scan_seconds);
-  if (n == 0)
-  {
-    TRACE("no networks found\n");
-  }
-  else
-  {
-    TRACE("%d networks found\n", n);
-    TRACE("Nr | SSID                             | RSSI | CH | Encryption\n");
-    for (int i = 0; i < n; ++i)
-    {
-      // Print SSID and RSSI for each network found
-      TRACE("%2d", i + 1);
-      TRACE(" | ");
-      TRACE("%-32.32s", WiFi.SSID(i).c_str());
-      TRACE(" | ");
-      TRACE("%4ld", WiFi.RSSI(i));
-      TRACE(" | ");
-      TRACE("%2ld", WiFi.channel(i));
-      TRACE(" | ");
-      switch (WiFi.encryptionType(i))
-      {
-      case WIFI_AUTH_OPEN:
-        TRACE("open");
-        break;
-      case WIFI_AUTH_WEP:
-        TRACE("WEP");
-        break;
-      case WIFI_AUTH_WPA_PSK:
-        TRACE("WPA");
-        break;
-      case WIFI_AUTH_WPA2_PSK:
-        TRACE("WPA2");
-        break;
-      case WIFI_AUTH_WPA_WPA2_PSK:
-        TRACE("WPA+WPA2");
-        break;
-      case WIFI_AUTH_WPA2_ENTERPRISE:
-        TRACE("WPA2-EAP");
-        break;
-      case WIFI_AUTH_WPA3_PSK:
-        TRACE("WPA3");
-        break;
-      case WIFI_AUTH_WPA2_WPA3_PSK:
-        TRACE("WPA2+WPA3");
-        break;
-      case WIFI_AUTH_WAPI_PSK:
-        TRACE("WAPI");
-        break;
-      default:
-        TRACE("unknown");
-      }
-      TRACE("\n");
-      delay(10);
-    }
-  }
-  TRACE("\n");
-
-  // Delete the scan result to free memory for code below.
-  WiFi.scanDelete();
-}
-
-void infoChip(int chipinfo_out)
-{
-  uint32_t total_internal_memory = heap_caps_get_total_size(MALLOC_CAP_INTERNAL);
-  uint32_t free_internal_memory = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
-  uint32_t largest_contig_internal_block = heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL);
-
-  if (chipinfo_out == 5) {
-    TRACE("Chip model: %s Rev %d\n", ESP.getChipModel(), ESP.getChipRevision());
-    TRACE("CPU has %d cores at %dMHz\n", ESP.getChipCores(), ESP.getCpuFreqMHz());
-    TRACE("Flash frequency is %dMHz\n", ESP.getFlashChipSpeed() / 1000000);
-    TRACE("Flash chip size: %d bytes\n", ESP.getFlashChipSize());
-    TRACE("Free  heap (internal memory) : %d bytes\n", esp_get_free_heap_size());
-    TRACE("Total DRAM (internal memory) : %d bytes\n", total_internal_memory);
-    TRACE("Free  DRAM (internal memory) : %d bytes\n", free_internal_memory);
-    TRACE("Largest free cont. DRAM block: %d bytes\n", largest_contig_internal_block);
-  } else if (chipinfo_out == 7) {
-    TLNET("Chip model: %s Rev %d\n", ESP.getChipModel(), ESP.getChipRevision());
-    TLNET("CPU has %d cores at %dMHz\n", ESP.getChipCores(), ESP.getCpuFreqMHz());
-    TLNET("Flash frequency is %dMHz\n", ESP.getFlashChipSpeed() / 1000000);
-    TLNET("Flash chip size: %d bytes\n", ESP.getFlashChipSize());
-    TLNET("Free  heap (internal memory) : %d bytes\n", esp_get_free_heap_size());
-    TLNET("Total DRAM (internal memory) : %d bytes\n", total_internal_memory);
-    TLNET("Free  DRAM (internal memory) : %d bytes\n", free_internal_memory);
-    TLNET("Largest free cont. DRAM block: %d bytes\n", largest_contig_internal_block);
-  } else {
-    String err_output("No chip info output specified! Arg is: \n");
-    TRACE("%s %d", err_output, chipinfo_out);
-    TLNET("%s %d", err_output, chipinfo_out);
-  }
-  chipinfo_out = 0;
-}
-
 void testButton(int bttntest_out)
 {
     if (bttntest_out == 5) {
@@ -570,7 +594,7 @@ void screenDraw(String lcdRow0, String lcdRow1) {
   lcd.setCursor(0, 1);
   lcd.printf("%s", lcdRow1.c_str());
 
-  indWiFiRx(15, 1);
+  rssiWiFi(15, 1);
   if (telnet.isConnected()) {
     lcd.setCursor(15, 0);
     lcd.print('T');
@@ -608,24 +632,7 @@ int readButton(bool btn0 = !digitalRead(pinBtn0),
   return keyArray[4];
 }
 
-void indWiFiRx(int col, int row)
-{
-  int rx = 0;
-  if (WiFi.RSSI() > -60 && WiFi.RSSI() < 0)
-    rx = 4;
-  else if (WiFi.RSSI() <= -60)
-    rx = 3;
-  else if (WiFi.RSSI() <= -80)
-    rx = 2;
-  else if (WiFi.RSSI() <= -90)
-    rx = 1;
-  else if (WiFi.RSSI() == 0)
-    rx = 5;
-  else
-    rx = 0;
-  lcd.setCursor(col, row);
-  lcd.write(rx);
-}
+
 
 void execButton()
 {
@@ -841,12 +848,12 @@ void commSerial()
     }
     case 6:
     {
-      infoWiFi(5); // 2do: telnet || serial output according to args
+      TRACE("%s\n", infoWiFi().c_str());
       break;
     }
     case 7:
     {
-      infoChip(5); // ag int: 5 - to Seial, 7 - to telnet
+      TRACE("%s\n", infoChip().c_str());
       break;
     }
     case 8:
@@ -890,7 +897,6 @@ void commSerial()
       else
       {
         TRACE("WiFi is already connected!\n");
-        infoWiFi(5);
       }
       break;
     }
@@ -910,7 +916,8 @@ void commSerial()
     }
     case 13:
     {
-      scanWiFi();
+      //TRACE("WiFi scan started [%s]\n", getTimeStr(0).c_str());
+      TRACE("%s\n", scanWiFi().c_str());
       break;
     }
     case 14:
@@ -920,7 +927,7 @@ void commSerial()
     }
     case 15:
     {
-      TRACE("%s\n", ESP.getChipModel());
+      TRACE("%s Rev. %d\n", ESP.getChipModel(), ESP.getChipRevision());
       break;
     }
     case 16:
@@ -1036,7 +1043,7 @@ void setup()
   lcd.init(I2C_SDA, I2C_SCL); // initialize LCD(I2C pins)
   lcd.backlight();
   initWiFi(mssid, mpass, 20, 500);
-  infoWiFi(5);
+  TRACE("%s\n", infoWiFi().c_str());
 
   if (isConnected())
   {
@@ -1115,6 +1122,5 @@ void loop(void)
   execButton();
   commSerial();
   readSensor(readPeriod);
-  //testSensor();
 }
 
