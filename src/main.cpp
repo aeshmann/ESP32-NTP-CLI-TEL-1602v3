@@ -144,7 +144,7 @@ String scanWiFi() {
   scanResult += n;
   scanResult += " networks found for ";
   scanResult += scan_elapse;
-  scanResult+= "ms at ";
+  scanResult += "ms at ";
   scanResult += getTimeStr(0).c_str();
   scanResult += '\n';
   int lengthMax = 0;
