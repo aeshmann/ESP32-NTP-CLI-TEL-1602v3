@@ -27,12 +27,12 @@ I2C device found at address 0x27 // LCD
 #define TRACE(...) Serial.printf(__VA_ARGS__) // Serial output simplified
 #define TLNET(...) telnet.printf(__VA_ARGS__) // Telnet output simplified
 
-#define pinBtn0 35
-#define pinBtn1 36
-#define pinBtn2 37
-#define pinBtn3 38
-#define ledBuiltIn 2
-#define RGB_LED_PIN 48
+#define PIN_BTN_0 35
+#define PIN_BTN_1 36
+#define PIN_BTN_2 37
+#define PIN_BTN_3 38
+#define PIN_BEEP 8
+#define PIN_RGBLED 48
 #define NUM_RGB_LEDS 1 // number of RGB LEDs (assuming 1 WS2812 LED)
 #define SHT85_ADDRESS 0x44
 
@@ -73,6 +73,8 @@ String getSensVal(char);
 String uptimeCount();
 String infoChip();
 void lcdBackLight(bool);
+void signalBeep(int);
+void signalBuzz(int, int, int);
 int readButton(bool, bool, bool, bool);
 void testButton(int);
 void readSensor(int);
@@ -83,7 +85,7 @@ void commSerial();
 ESPTelnet telnet;
 SHT85 sht(SHT85_ADDRESS);
 LiquidCrystal_I2C lcd(0x27, 16, 2); // LCD i2c
-Adafruit_NeoPixel rgb_led = Adafruit_NeoPixel(NUM_RGB_LEDS, RGB_LED_PIN, NEO_GRB + NEO_KHZ800);
+Adafruit_NeoPixel rgb_led = Adafruit_NeoPixel(NUM_RGB_LEDS, PIN_RGBLED, NEO_GRB + NEO_KHZ800);
 
 
 bool initWiFi(const char *mssid, const char *mpass,
@@ -355,6 +357,32 @@ void lcdBackLight(bool backLight) {
   }
 }
 
+void signalBeep(int beep_ms) {
+  uint32_t beep_start = millis();
+  while (millis() <= beep_start + beep_ms) {
+    digitalWrite(PIN_BEEP, HIGH);
+  }
+  digitalWrite(PIN_BEEP, LOW);
+}
+
+void signalBuzz(int beep_count, int beep_length, int beep_pause)
+{
+  for (int i = 0; i < beep_count; i++)
+  {
+    uint32_t beep_start = millis();
+    uint32_t beep_stop = beep_start + beep_length;
+    while (millis() <= beep_stop)
+    {
+      digitalWrite(PIN_BEEP, HIGH);
+    }
+    while (millis() < beep_stop + beep_pause)
+    {
+      digitalWrite(PIN_BEEP, LOW);
+    }
+  }
+  digitalWrite(PIN_BEEP, LOW);
+}
+
 void setupTelnet()
 {
   // passing on functions for various telnet events
@@ -604,10 +632,10 @@ void screenDraw(String lcdRow0, String lcdRow1) {
   }
 }
 
-int readButton(bool btn0 = !digitalRead(pinBtn0),
-               bool btn1 = !digitalRead(pinBtn1),
-               bool btn2 = !digitalRead(pinBtn2),
-               bool btn3 = !digitalRead(pinBtn3))
+int readButton(bool btn0 = !digitalRead(PIN_BTN_0),
+               bool btn1 = !digitalRead(PIN_BTN_1),
+               bool btn2 = !digitalRead(PIN_BTN_2),
+               bool btn3 = !digitalRead(PIN_BTN_3))
 {
   static bool flagBtn0, flagBtn1, flagBtn2, flagBtn3;
   static bool flagArray[]{flagBtn0, flagBtn1, flagBtn2, flagBtn3};
@@ -631,8 +659,6 @@ int readButton(bool btn0 = !digitalRead(pinBtn0),
   }
   return keyArray[4];
 }
-
-
 
 void execButton()
 {
@@ -679,11 +705,15 @@ void execButton()
 
     break;
   case 1:
-
-    break;
+    {
+      digitalWrite(PIN_BEEP, HIGH);
+      break;
+    }
   case 2:
-
-    break;
+    {
+      digitalWrite(PIN_BEEP, LOW);
+      break;
+    }
   case 3:
 
     break;
@@ -1030,12 +1060,14 @@ void readSensor(int readPeriod) {
 
 void setup()
 {
-  pinMode(pinBtn0, INPUT);
-  pinMode(pinBtn1, INPUT);
-  pinMode(pinBtn2, INPUT);
-  pinMode(pinBtn3, INPUT);
-  pinMode(ledBuiltIn, OUTPUT);
-  digitalWrite(ledBuiltIn, HIGH);
+  pinMode(PIN_BTN_0, INPUT);
+  pinMode(PIN_BTN_1, INPUT);
+  pinMode(PIN_BTN_2, INPUT);
+  pinMode(PIN_BTN_3, INPUT);
+  pinMode(PIN_BEEP, OUTPUT);
+  rgb_led.begin();
+  rgb_led.setPixelColor(0, rgb_led.Color(64, 64, 0));
+  rgb_led.show();
 
   setupSerial(0);
   setupSerial(1);
@@ -1112,6 +1144,12 @@ void setup()
   boot_time = time(nullptr);
 
   TRACE("\nGuru meditates...\nESP32 Ready.\n");
+  rgb_led.setPixelColor(0, rgb_led.Color(0, 255, 0)); // Green
+  rgb_led.show();
+  signalBuzz(3, 50, 75);
+  rgb_led.clear();
+  rgb_led.show();
+  
 }
 
 void loop(void)
