@@ -36,5 +36,4 @@ const char* comm_about =
 "and some CLI commands\n"
 "compiled: ";
 const char* comm_err = "Command not understood: ";
-const char* comm_helo = "Hi, ";
 const char* tnet_discon = "Disconnecting you!";
