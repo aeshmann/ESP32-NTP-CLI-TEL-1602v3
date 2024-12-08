@@ -40,23 +40,22 @@ const char *ntpHost0 = "0.ru.pool.ntp.org";
 const char *ntpHost1 = "1.ru.pool.ntp.org";
 const char *ntpHost2 = "2.ru.pool.ntp.org";
 
-const char *mssid = "SSID";
-const char *mpass = "PASS";
+const char *mssid = "Xiaomi_065C";
+const char *mpass = "43v3ry0nG";
 
-IPAddress ip;
-const uint16_t port = 23;
-String client_ip;
 const int serial_speed = 115200;
-int keyArray[4]{};
+const uint16_t port = 23;
+IPAddress ip;
+
+String client_ip;
+
 bool backLight = true;
 String boot_date;
 time_t boot_time;
 
+
 bool initWiFi(const char *, const char *, int, int);
 bool isWiFiOn();
-String infoWiFi();
-String scanWiFi();
-void rssiWiFi(int, int);
 
 void setupSerial(int);
 void setupTelnet();
@@ -66,22 +65,28 @@ void onTelnetDisconnect(String ip);
 void onTelnetReconnect(String ip);
 void onTelnetConnectionAttempt(String ip);
 void onTelnetInput(String str);
-void readSerial();
-String commandHandler(String);
 void errorMsg(String, bool);
+
+void readSerial();
+String commHandler(String);
+
+int* buttonsRead();
+void buttonsExec(int*);
+
 void screenDraw(String, String);
-String getTimeStr(int);
-String getSensVal(char);
-String uptimeCount();
-String infoChip();
+void rssiWiFi(int, int);
 void lcdBackLight(bool);
 void signalBeep(int);
 void signalBuzz(int, int, int);
-int readButton(bool, bool, bool, bool);
-void testButton(int);
 void readSensor(int);
+
+String getTimeStr(int);
+String getSensVal(char);
+String uptimeCount();
 String testSensor();
-void execButton();
+String infoChip();
+String infoWiFi();
+String scanWiFi();
 
 ESPTelnet telnet;
 SHT85 sht(SHT85_ADDRESS);
@@ -433,7 +438,7 @@ void onTelnetConnectionAttempt(String ip)
 void onTelnetInput(const String comm_telnet)
 {
   TLNET("[%s] > %s\n", getTimeStr(0), comm_telnet);
-  TLNET("%s", commandHandler(comm_telnet).c_str());
+  TLNET("%s", commHandler(comm_telnet).c_str());
 }
 
 void readSerial() {
@@ -441,19 +446,8 @@ void readSerial() {
   {
     String comm_serial = Serial.readStringUntil('\n');
     TRACE("[%s] > %s :\n", getTimeStr(0), comm_serial);
-    TRACE("%s", commandHandler(comm_serial).c_str());
+    TRACE("%s", commHandler(comm_serial).c_str());
   }
-}
-
-void testButton(int bttntest_out)
-{
-    if (bttntest_out == 5) {
-      TRACE("BTN: %d, %d, %d, %d \n", keyArray[0], keyArray[1], keyArray[2], keyArray[3]);
-    } else if (bttntest_out == 7) {
-      TLNET("BTN: %d, %d, %d, %d \n", keyArray[0], keyArray[1], keyArray[2], keyArray[3]);
-    } else {
-      return;
-    }
 }
 
 void screenDraw(String lcdRow0, String lcdRow1) {
@@ -472,41 +466,39 @@ void screenDraw(String lcdRow0, String lcdRow1) {
   }
 }
 
-int readButton(bool btn0 = !digitalRead(PIN_BTN_0),
-               bool btn1 = !digitalRead(PIN_BTN_1),
-               bool btn2 = !digitalRead(PIN_BTN_2),
-               bool btn3 = !digitalRead(PIN_BTN_3))
-{
-  static bool flagBtn0, flagBtn1, flagBtn2, flagBtn3;
-  static bool flagArray[]{flagBtn0, flagBtn1, flagBtn2, flagBtn3};
-  bool btnArray[]{btn0, btn1, btn2, btn3};
-  for (int i = 0; i < 4; i++)
-  {
-    if (btnArray[i] && !flagArray[i])
-    {
-      flagArray[i] = true;
-      keyArray[i]++;
-      lcd.clear(); // clearing LCD on every button press
-      if (keyArray[i] > 16)
-      { // max button interation = 16
-        keyArray[i] = 0;
+int* buttonsRead() {
+  
+  static int keysArr[4];
+  static bool btnFlag[4];
+  bool btnArr[4];
+
+  btnArr[0] = !digitalRead(PIN_BTN_0);
+  btnArr[1] = !digitalRead(PIN_BTN_1);
+  btnArr[2] = !digitalRead(PIN_BTN_2);
+  btnArr[3] = !digitalRead(PIN_BTN_3);
+
+  for (int i = 0; i < 4; i++) {
+    if (btnArr[i] && !btnFlag[i]) {
+      lcd.clear();
+      keysArr[i]++;
+      btnFlag[i] = true;
+      if (keysArr[i] > 5) {
+        keysArr[i] = 0;
       }
-    }
-    else if (!btnArray[i] && flagArray[i])
-    {
-      flagArray[i] = false;
+    } else if (!btnArr[i] && btnFlag[i]) {
+      btnFlag[i] = false;
     }
   }
-  return keyArray[4];
-}
+  return keysArr;
+} 
 
-void execButton()
+void buttonsExec(int* btn_curr)
 {
   static uint32_t key0timer;
-  uint32_t period;
-  if (millis() >= key0timer + 200)
+  uint32_t period = 200;
+  if (millis() >= key0timer + period)
   {
-    switch (keyArray[0])
+    switch (btn_curr[0])
     {
     case 0: {
       String lcdRowStr0(getTimeStr(0) + " " + getTimeStr(8));
@@ -533,13 +525,13 @@ void execButton()
     }
       break;
     case 4:
-      keyArray[0] = 0;
+      btn_curr[0] = 0;
       break;
     }
     key0timer = millis();
   }
 
-  switch (keyArray[1])
+  switch (btn_curr[1])
   {
     case 0:
 
@@ -558,11 +550,11 @@ void execButton()
 
     break;
   case 4:
-    keyArray[3] = 0;
+    btn_curr[1] = 0;
     break;
   }
 
-  switch (keyArray[2])
+  switch (btn_curr[2])
   {
   case 0:
     break;
@@ -586,10 +578,10 @@ void execButton()
     rgb_led.setPixelColor(0, rgb_led.Color(0, 0, 0));
     rgb_led.show();
   case 6:
-    keyArray[2] = 0;
+    btn_curr[2] = 0;
   }
 
-  switch (keyArray[3])
+  switch (btn_curr[3])
   {
   case 0:
     lcdBackLight(backLight);
@@ -598,7 +590,7 @@ void execButton()
     lcdBackLight(!backLight);
     break;
   case 2:
-    keyArray[3] = 0;
+    btn_curr[3] = 0;
     break;
   }
 }
@@ -661,7 +653,6 @@ String getSensVal(char valSelact) {
   }
 }
 
-
 String testSensor()
 {
   static uint32_t start, stop;
@@ -692,7 +683,7 @@ void readSensor(int readPeriod) {
   }
 }
 
-String commandHandler(const String comm_input) {
+String commHandler(const String comm_input) {
   int exec_case = 0;
   String comm_output("");
   for (int i = 1; i < comm_qty; i++) {
@@ -861,7 +852,12 @@ String commandHandler(const String comm_input) {
     }
     case 21:
     {
-      comm_output += "Button test upcoming\n";
+      int* btn_curr = buttonsRead();
+      comm_output += String(btn_curr[0]) + ' ';
+      comm_output += String(btn_curr[1]) + ' ';
+      comm_output += String(btn_curr[2]) + ' ';
+      comm_output += String(btn_curr[3]) + ' ';
+      comm_output += "<- BTN state V2\n";
       break;
     }
     case 22:
@@ -968,20 +964,17 @@ void setup()
   TRACE("\nGuru meditates...\nESP32 Ready.\n");
   rgb_led.setPixelColor(0, rgb_led.Color(0, 255, 0)); // Green
   rgb_led.show();
-  signalBuzz(3, 50, 75);
+  signalBuzz(2, 50, 75);
   rgb_led.clear();
   rgb_led.show();
-  
 }
 
 void loop(void)
 {
-  int readPeriod = 5000;
-  readSensor(readPeriod);
-
   telnet.loop();
   readSerial();
-  readButton();
-  execButton();
+  int readPeriod = 5000;
+  readSensor(readPeriod);
+  buttonsExec(buttonsRead());
 }
 
