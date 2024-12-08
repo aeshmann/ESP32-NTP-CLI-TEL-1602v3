@@ -686,6 +686,7 @@ void readSensor(int readPeriod) {
 String commHandler(const String comm_input) {
   int exec_case = 0;
   String comm_output("");
+  int comm_qty = sizeof(comm_array) / sizeof(comm_array[0]);
   for (int i = 1; i < comm_qty; i++) {
     if (comm_array[i][0] == comm_input) {
       exec_case = i;
@@ -725,7 +726,11 @@ String commHandler(const String comm_input) {
     case 5:
     {
       for (int k = 1; k < comm_qty; k++) {
-        comm_output += "[ " + String(k) + " ] " + comm_array[k][0] + "\t - " + comm_array[k][1] + '\n';
+        if (k < 10) {
+          comm_output += "[  " + String(k) + " ] " + comm_array[k][0] + "\t - " + comm_array[k][1] + '\n';
+        } else {
+          comm_output += "[ " + String(k) + " ] " + comm_array[k][0] + "\t - " + comm_array[k][1] + '\n';
+        }
       }
       break;
     }

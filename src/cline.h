@@ -2,7 +2,6 @@
 
 const char* build_date = __DATE__ " " __TIME__;
 const char* term_clear = "\033[2J\033[H";
-const int comm_qty = 24;
 const String comm_array[][2]{
     {"", "error"},                           // 0
     {"abt", "information about chip"},       // 1
@@ -29,11 +28,3 @@ const String comm_array[][2]{
     {"tests", "test SHT30 sensor"},          // 22
     {"sens", "show sensor values"}           // 23
 };
-
-const char* comm_about =
-"\nHi! I'm ESP32 WROOM Board\n"
-"Sketch of NTP clock, telnet\n"
-"and some CLI commands\n"
-"compiled: ";
-const char* comm_err = "Command not understood: ";
-const char* tnet_discon = "Disconnecting you!";
