@@ -2,7 +2,8 @@
 
 const char* build_date = __DATE__ " " __TIME__;
 const char* term_clear = "\033[2J\033[H";
-const String comm_array[][2]{
+
+std::vector<std::pair<std::string, std::string>> commands = {
     {"", "error"},                           // 0
     {"abt", "information about chip"},       // 1
     {"cls", "clear terminal screen"},        // 2
@@ -26,5 +27,6 @@ const String comm_array[][2]{
     {"comon", "launch setup Serial"},        // 20
     {"testb", "seial show btn arr output"},  // 21
     {"tests", "test SHT30 sensor"},          // 22
-    {"sens", "show sensor values"}           // 23
+    {"sens", "show sensor values"}    
 };
+

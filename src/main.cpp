@@ -6,7 +6,11 @@ I2C device found at address 0x27 // LCD
 
 */
 
-
+#include <cstdint>
+#include <string>
+#include <vector>
+#include <utility>
+#include <algorithm>
 #include <Wire.h>
 #include <WIFi.h>
 #include <SHT85.h>
@@ -686,14 +690,14 @@ void readSensor(int readPeriod) {
 String commHandler(const String comm_input) {
   int exec_case = 0;
   String comm_output("");
-  int comm_qty = sizeof(comm_array) / sizeof(comm_array[0]);
-  for (int i = 1; i < comm_qty; i++) {
-    if (comm_array[i][0] == comm_input) {
+
+  for (int i = 1; i < commands.size(); i++) {
+    if (commands[i].first == std::string(comm_input.c_str())) {
       exec_case = i;
       break;
     } else {
       exec_case = 0;
-    }
+      }
   }
 
   switch (exec_case)
@@ -725,11 +729,11 @@ String commHandler(const String comm_input) {
     }
     case 5:
     {
-      for (int k = 1; k < comm_qty; k++) {
+      for (int k = 1; k < commands.size(); k++) {
         if (k < 10) {
-          comm_output += "[  " + String(k) + " ] " + comm_array[k][0] + "\t - " + comm_array[k][1] + '\n';
+          comm_output += "[  " + String(k) + " ] " + String(commands[k].first.c_str()) + "\t - " + String(commands[k].second.c_str()) + '\n';
         } else {
-          comm_output += "[ " + String(k) + " ] " + comm_array[k][0] + "\t - " + comm_array[k][1] + '\n';
+          comm_output += "[ " + String(k) + " ] " + String(commands[k].first.c_str()) + "\t - " + String(commands[k].second.c_str()) + '\n';
         }
       }
       break;
@@ -932,9 +936,9 @@ void setup()
   }
   TRACE("\n");
   String greet = "     Welcome to ESP32-WROOM board!      ";
-  for (char letter : greet)
+  for (char l : greet)
   {
-    TRACE("%c", letter);
+    TRACE("%c", l);
     delay(25);
   }
   TRACE("\n");
