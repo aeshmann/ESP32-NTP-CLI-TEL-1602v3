@@ -314,7 +314,7 @@ String infoChip() {
 
   infoChipStr[0] += "Chip:";
   infoChipStr[0] += ESP.getChipModel();
-  infoChipStr[0] += " R";
+  infoChipStr[0] += " Rev.";
   infoChipStr[0] += ESP.getChipRevision();
   
   infoChipStr[1] += "CPU :";
@@ -640,7 +640,7 @@ String getTimeStr(int numStr)
   return timeStrRet;
 }
 
-String getSensVal(char valSelact) {
+String getSensVal(char valSelect) {
   float sens_temperature;
   float sens_relhumidity;
   String errorStr("err");
@@ -648,9 +648,9 @@ String getSensVal(char valSelact) {
   sens_relhumidity = sht.getHumidity();
   String sensTempStr = String(sens_temperature, 1);
   String sensHumidStr = String(sens_relhumidity, 1);
-  if (valSelact == 't') {
+  if (valSelect == 't') {
     return sensTempStr;
-  } else if (valSelact == 'h') {
+  } else if (valSelect == 'h') {
     return sensHumidStr;
   } else {
     return errorStr;
