@@ -1,6 +1,6 @@
 /* Version 1.6
 
-ESP32-S3-WROOM Clock with LCD1602
+ESP32-S3-N8R2 Clock with LCD1602
 
 I2C device found at address 0x27 // LCD
 
@@ -12,7 +12,7 @@ I2C device found at address 0x27 // LCD
 #include <utility>
 #include <algorithm>
 #include <Wire.h>
-#include <WIFi.h>
+#include <WiFi.h>
 #include <SHT85.h>
 #include <Arduino.h>
 #include <ESPTelnet.h>
@@ -44,16 +44,14 @@ const char *ntpHost0 = "0.ru.pool.ntp.org";
 const char *ntpHost1 = "1.ru.pool.ntp.org";
 const char *ntpHost2 = "2.ru.pool.ntp.org";
 
-const char *mssid = "YOUR_WIFI_SSID";
-const char *mpass = "YOUR_WIFI_PASS";
+const char *mssid = "YOUR_SSID";
+const char *mpass = "YOUR_PASS";
 
 const int serial_speed = 115200;
-const uint16_t port = 23;
-IPAddress ip;
-
-String client_ip;
-
+const uint16_t telnet_port = 23;
 bool backLight = true;
+IPAddress local_ip;
+String client_ip;
 String boot_date;
 time_t boot_time;
 
@@ -61,8 +59,9 @@ time_t boot_time;
 bool initWiFi(const char *, const char *, int, int);
 bool isWiFiOn();
 
-void setupSerial(int);
+void setupSerial(int, int);
 void setupTelnet();
+void initLCD1602();
 
 void onTelnetConnect(String ip);
 void onTelnetDisconnect(String ip);
@@ -79,6 +78,7 @@ void buttonsExec(int*);
 
 void screenDraw(String, String);
 void rssiWiFi(int, int);
+void ledBlink(int);
 void lcdBackLight(bool);
 void signalBeep(int);
 void signalBuzz(int, int, int);
@@ -249,7 +249,17 @@ void rssiWiFi(int col, int row)
   else
     rx = 0;
   lcd.setCursor(col, row);
-  lcd.write(rx);
+  static uint32_t timer_char;
+  uint32_t pause_char = 1000;
+  if (telnet.isConnected()) {
+    if ((millis()/1000)%2 == 0) {
+      lcd.write(rx);
+    } else {
+      lcd.print('T');
+    }
+  } else {
+    lcd.write(rx);
+  }
 }
 
 void errorMsg(String error, bool restart = true)
@@ -264,11 +274,11 @@ void errorMsg(String error, bool restart = true)
   }
 }
 
-void setupSerial(int uart_num)
+void setupSerial(int uart_num, int uart_baud)
 {
   if (uart_num == 0)
   {
-    Serial.begin(serial_speed);
+    Serial.begin(uart_baud);
     while (!Serial)
     {
       ;
@@ -279,7 +289,7 @@ void setupSerial(int uart_num)
   }
   else if (uart_num == 1)
   {
-    Serial1.begin(serial_speed, SERIAL_8N1, RXD1, TXD1);
+    Serial1.begin(uart_baud, SERIAL_8N1, RXD1, TXD1);
     while (!Serial1)
     {
       ;
@@ -393,6 +403,46 @@ void signalBuzz(int beep_count, int beep_length, int beep_pause)
   digitalWrite(PIN_BEEP, LOW);
 }
 
+void ledBlink(int blink_count) {
+  for (int i = 0; i < blink_count; i++) {
+    rgb_led.setPixelColor(0, rgb_led.Color(0, 128, 0));
+    rgb_led.show();
+    delay(50);
+    rgb_led.setPixelColor(0, rgb_led.Color(0, 0, 0));
+    rgb_led.show();
+    delay(100);
+  }
+  rgb_led.setPixelColor(0, rgb_led.Color(0, 0, 0));
+  rgb_led.show();
+  rgb_led.clear();
+}
+
+void initLCD1602()
+{
+  lcd.init(I2C_SDA, I2C_SCL); // initialize LCD(I2C pins)
+  lcd.backlight();
+
+  lcd.createChar(0, cChar0);
+  lcd.createChar(1, cChar1);
+  lcd.createChar(2, cChar2);
+  lcd.createChar(3, cChar3);
+  lcd.createChar(4, cChar4);
+  lcd.createChar(5, cChar5);
+
+  lcd.setCursor(3, 0);
+  lcd.print("Loading...");
+  for (int i = 0; i < 15; i++)
+  {
+    lcd.setCursor(i, 1);
+    lcd.write(255);
+    lcd.setCursor(15, 0);
+    lcd.write(i / 3);
+    delay(50);
+    lcd.write(char(16));
+  }
+  lcd.clear();
+}
+
 void setupTelnet()
 {
   // passing on functions for various telnet events
@@ -403,7 +453,7 @@ void setupTelnet()
   telnet.onInputReceived(onTelnetInput);
 
   //TRACE("- Telnet: ");
-  if (telnet.begin(port))
+  if (telnet.begin(telnet_port))
   {
     TRACE("- Telnet running\n");
   }
@@ -418,6 +468,7 @@ void setupTelnet()
 void onTelnetConnect(String ip)
 {
   signalBeep(50);
+  lcd.clear();
   TRACE("- Telnet: %s connected\n", ip.c_str());
   TLNET("\nWelcome %s\n(Use ^] +q to disconnect)\n", telnet.getIP().c_str());
   client_ip = ip.c_str();
@@ -426,6 +477,7 @@ void onTelnetConnect(String ip)
 void onTelnetDisconnect(String ip)
 {
   signalBeep(100);
+  lcd.clear();
   TRACE("- Telnet: %s disconnected\n", ip.c_str());
 }
 
@@ -459,15 +511,6 @@ void screenDraw(String lcdRow0, String lcdRow1) {
   lcd.printf("%s", lcdRow0.c_str());
   lcd.setCursor(0, 1);
   lcd.printf("%s", lcdRow1.c_str());
-
-  rssiWiFi(15, 1);
-  if (telnet.isConnected()) {
-    lcd.setCursor(15, 0);
-    lcd.print('T');
-  } else {
-    lcd.setCursor(15, 0);
-    lcd.print(' ');
-  }
 }
 
 int* buttonsRead() {
@@ -505,15 +548,24 @@ void buttonsExec(int* btn_curr)
     switch (btn_curr[0])
     {
     case 0: {
-      String lcdRowStr0(getTimeStr(0) + " " + getTimeStr(8));
-      String lcdRowStr1(WiFi.localIP().toString().c_str());
+      String lcdRowStr0, lcdRowStr1;
+      if (telnet.isConnected()) {
+        lcdRowStr0 = client_ip;
+      } else {
+        lcdRowStr0 = getTimeStr(0) + " " + getTimeStr(8);
+      }
+      lcdRowStr1 = WiFi.localIP().toString().c_str();
       screenDraw(lcdRowStr0, lcdRowStr1);
+      rssiWiFi(15, 1);
+      lcdRowStr0.clear();
+      lcdRowStr1.clear();
     }
       break;
     case 1: {
       String lcdRowStr0(getTimeStr(1) + " " + getTimeStr(7));
       String lcdRowStr1(WiFi.localIP().toString().c_str());
       screenDraw(lcdRowStr0, lcdRowStr1);
+      rssiWiFi(15, 1);
     }
       break;
     case 2: {
@@ -789,7 +841,11 @@ String commHandler(const String comm_input) {
     case 13:
     {
       comm_output += "WiFi scan starts at " + getTimeStr(0) + '\n';
+      lcd.clear();
+      lcd.setCursor(0, 0);
+      lcd.printf("WiFi scan active");
       comm_output += scanWiFi();
+      lcd.clear();
       comm_output += "Scan complete\n";
       break;
     }
@@ -854,7 +910,7 @@ String commHandler(const String comm_input) {
       if (Serial) {
         comm_output += "Serial is already up!\n";
       } else {
-        setupSerial(0);
+        setupSerial(0, 115200);
         comm_output += "Setting up Serial\n";
       }
       break;
@@ -879,6 +935,12 @@ String commHandler(const String comm_input) {
       comm_output += getSensVal('t') + "C " + getSensVal('h') + "%\n";
       break;
     }
+    case 24:
+    {
+      comm_output += "RGB LED should blink\n";
+      ledBlink(3);
+      break;
+    }
   }
   return comm_output;
 }
@@ -893,20 +955,16 @@ void setup()
   rgb_led.begin();
   rgb_led.setPixelColor(0, rgb_led.Color(64, 64, 0));
   rgb_led.show();
+  initLCD1602();
+  setupSerial(0, 115200);
+  setupSerial(1, 115200);
 
-  setupSerial(0);
-  setupSerial(1);
-
-  lcd.init(I2C_SDA, I2C_SCL); // initialize LCD(I2C pins)
-  lcd.backlight();
   initWiFi(mssid, mpass, 20, 500);
-
   TRACE("%s\n", infoWiFi().c_str());
-
   if (isWiFiOn())
   {
-    ip = WiFi.localIP();
-    TRACE("\n- Telnet: %s:%u\n", ip.toString().c_str(), port);
+    local_ip = WiFi.localIP();
+    TRACE("\n- Telnet: %s:%u\n", local_ip.toString().c_str(), telnet_port);
     setupTelnet();
   }
   else
@@ -951,22 +1009,6 @@ void setup()
   }
   TRACE("\n");
 
-  lcd.createChar(0, cChar0);
-  lcd.createChar(1, cChar1);
-  lcd.createChar(2, cChar2);
-  lcd.createChar(3, cChar3);
-  lcd.createChar(4, cChar4);
-  lcd.createChar(5, cChar5);
-
-  for (int i = 0; i < 5; i++)
-  {
-    lcd.setCursor(15, 0);
-    lcd.write(i);
-    delay(100);
-    lcd.write(char(16));
-  }
-  lcd.clear();
-
   boot_date = getTimeStr(0) + ' ' + getTimeStr(6);
   boot_time = time(nullptr);
 
@@ -982,8 +1024,7 @@ void loop(void)
 {
   telnet.loop();
   readSerial();
-  int readPeriod = 5000;
-  readSensor(readPeriod);
+  readSensor(5000);
   buttonsExec(buttonsRead());
 }
 

@@ -27,6 +27,7 @@ std::vector<std::pair<std::string, std::string>> commands = {
     {"comon", "launch setup Serial"},        // 20
     {"testb", "seial show btn arr output"},  // 21
     {"tests", "test SHT30 sensor"},          // 22
-    {"sens", "show sensor values"}    
+    {"sens", "show sensor values"},          // 23
+    {"blink", "blink with built-in led"}     // 24
 };
 
