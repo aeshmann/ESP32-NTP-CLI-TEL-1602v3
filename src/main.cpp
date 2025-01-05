@@ -40,6 +40,7 @@ I2C device found at address 0x27 // LCD
 #define PIN_RGBLED 48
 #define NUM_RGB_LEDS 1 // number of RGB LEDs (assuming 1 WS2812 LED)
 #define SHT85_ADDRESS 0x44
+#define LCD1602_ADDRESS 0x27
 
 const char *ntpHost0 = "0.ru.pool.ntp.org";
 const char *ntpHost1 = "1.ru.pool.ntp.org";
@@ -95,7 +96,7 @@ String scanWiFi();
 
 ESPTelnet telnet;
 SHT85 sht(SHT85_ADDRESS);
-LiquidCrystal_I2C lcd(0x27, 16, 2); // LCD i2c
+LiquidCrystal_I2C lcd(LCD1602_ADDRESS, 16, 2); // LCD i2c
 Adafruit_NeoPixel rgb_led = Adafruit_NeoPixel(NUM_RGB_LEDS, PIN_RGBLED, NEO_GRB + NEO_KHZ800);
 
 
@@ -498,7 +499,6 @@ void onTelnetConnectionAttempt(String ip)
 
 void onTelnetInput(const String comm_telnet)
 {
-  // TLNET("[%s] > %s\n", getTimeStr(0), comm_telnet);
   TLNET("%s", commHandler(comm_telnet).c_str());
 }
 
@@ -506,7 +506,6 @@ void readSerial() {
   if (Serial.available())
   {
     String comm_serial = Serial.readStringUntil('\n');
-    //TRACE("[%s] > %s :\n", getTimeStr(0), comm_serial);
     TRACE("%s", commHandler(comm_serial).c_str());
   }
 }
