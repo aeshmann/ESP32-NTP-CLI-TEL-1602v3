@@ -28,6 +28,7 @@ std::vector<std::pair<std::string, std::string>> commands = {
     {"testb", "seial show btn arr output"},  // 21
     {"tests", "test SHT30 sensor"},          // 22
     {"sens", "show sensor values"},          // 23
-    {"blink", "blink with built-in led"}     // 24
+    {"blink", "blink with built-in led"},    // 24
+    {"beep", "Beeps internal beeper"}        // 25
 };
 

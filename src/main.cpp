@@ -10,9 +10,10 @@ I2C device found at address 0x27 // LCD
 #include <string>
 #include <vector>
 #include <utility>
+#include <sstream>
 #include <algorithm>
-#include <Wire.h>
-#include <WiFi.h>
+// #include <Wire.h>
+// #include <WiFi.h>
 #include <SHT85.h>
 #include <Arduino.h>
 #include <ESPTelnet.h>
@@ -78,7 +79,7 @@ void buttonsExec(int*);
 
 void screenDraw(String, String);
 void rssiWiFi(int, int);
-void ledBlink(int);
+void ledBlink(int, int, int);
 void lcdBackLight(bool);
 void signalBeep(int);
 void signalBuzz(int, int, int);
@@ -403,17 +404,20 @@ void signalBuzz(int beep_count, int beep_length, int beep_pause)
   digitalWrite(PIN_BEEP, LOW);
 }
 
-void ledBlink(int blink_count) {
+void ledBlink(int blink_count, int blink_length, int blink_pause) {
+  
   for (int i = 0; i < blink_count; i++) {
-    rgb_led.setPixelColor(0, rgb_led.Color(0, 128, 0));
-    rgb_led.show();
-    delay(50);
-    rgb_led.setPixelColor(0, rgb_led.Color(0, 0, 0));
-    rgb_led.show();
-    delay(100);
+    uint32_t blink_start = millis();
+    uint32_t blink_stop = blink_start + blink_length;
+    while (millis() <= blink_stop) {
+      rgb_led.setPixelColor(0, rgb_led.Color(0, 128, 0));
+      rgb_led.show();
+    }
+    while (millis() < blink_stop + blink_pause) {
+      rgb_led.setPixelColor(0, rgb_led.Color(0, 0, 0));
+      rgb_led.show();
+    }
   }
-  rgb_led.setPixelColor(0, rgb_led.Color(0, 0, 0));
-  rgb_led.show();
   rgb_led.clear();
 }
 
@@ -477,6 +481,7 @@ void onTelnetConnect(String ip)
 void onTelnetDisconnect(String ip)
 {
   signalBeep(100);
+  client_ip.clear();
   lcd.clear();
   TRACE("- Telnet: %s disconnected\n", ip.c_str());
 }
@@ -493,7 +498,7 @@ void onTelnetConnectionAttempt(String ip)
 
 void onTelnetInput(const String comm_telnet)
 {
-  TLNET("[%s] > %s\n", getTimeStr(0), comm_telnet);
+  // TLNET("[%s] > %s\n", getTimeStr(0), comm_telnet);
   TLNET("%s", commHandler(comm_telnet).c_str());
 }
 
@@ -501,12 +506,18 @@ void readSerial() {
   if (Serial.available())
   {
     String comm_serial = Serial.readStringUntil('\n');
-    TRACE("[%s] > %s :\n", getTimeStr(0), comm_serial);
+    //TRACE("[%s] > %s :\n", getTimeStr(0), comm_serial);
     TRACE("%s", commHandler(comm_serial).c_str());
   }
 }
 
 void screenDraw(String lcdRow0, String lcdRow1) {
+  if (lcdRow0.length() > 16) {
+    lcdRow0 = "Too long string";
+  }
+  if (lcdRow1.length() > 16) {
+    lcdRow1 = "Too long string";
+  }
   lcd.setCursor(0, 0);
   lcd.printf("%s", lcdRow0.c_str());
   lcd.setCursor(0, 1);
@@ -740,18 +751,27 @@ void readSensor(int readPeriod) {
 }
 
 String commHandler(const String comm_input) {
-  int exec_case = 0;
+  std::string cmd_input(comm_input.c_str());
+  std::stringstream cmd_strm(cmd_input);
+  std::vector<std::string> cmd_vect;
+  std::string token;
+  while (getline(cmd_strm, token, ' ')) {
+    cmd_vect.push_back(token);
+  }
   String comm_output("");
-
+  int exec_case = 0;
   for (int i = 1; i < commands.size(); i++) {
-    if (commands[i].first == std::string(comm_input.c_str())) {
+    if (commands[i].first == cmd_vect[0]) {
       exec_case = i;
       break;
     } else {
       exec_case = 0;
-      }
+    }
   }
-
+  TRACE("[%s] > %s :\n", getTimeStr(0), cmd_vect[0].c_str());
+  if (telnet.isConnected()) {
+    TLNET("[%s] > %s\n", getTimeStr(0), cmd_vect[0].c_str());
+  }
   switch (exec_case)
   {
     case 0:
@@ -938,8 +958,13 @@ String commHandler(const String comm_input) {
     case 24:
     {
       comm_output += "RGB LED should blink\n";
-      ledBlink(3);
+      ledBlink(3, 100, 200);
       break;
+    }
+    case 25:
+    {
+      comm_output += "Signal beeped\n";
+      signalBuzz(3, 50, 100);
     }
   }
   return comm_output;
