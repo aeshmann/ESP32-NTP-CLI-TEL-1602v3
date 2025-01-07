@@ -22,6 +22,7 @@ I2C device found at address 0x27 // LCD
 
 #include "chars.h"
 #include "cline.h"
+#include "cwifi.h"
 
 #define I2C_SDA 10
 #define I2C_SCL 11
@@ -46,9 +47,6 @@ I2C device found at address 0x27 // LCD
 const char *ntpHost0 = "0.ru.pool.ntp.org";
 const char *ntpHost1 = "1.ru.pool.ntp.org";
 const char *ntpHost2 = "2.ru.pool.ntp.org";
-
-const char *mssid = "SSID";
-const char *mpass = "PASS";
 
 const int serial_speed = 115200;
 const uint16_t telnet_port = 23;
