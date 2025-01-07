@@ -7,18 +7,19 @@ I2C device found at address 0x27 // LCD
 */
 
 #include <cstdint>
+#include <cctype>
 #include <string>
 #include <vector>
 #include <utility>
 #include <sstream>
 #include <algorithm>
-// #include <Wire.h>
-// #include <WiFi.h>
-#include <SHT85.h>
+
 #include <Arduino.h>
-#include <ESPTelnet.h>
 #include <LiquidCrystal_I2C.h>
 #include <Adafruit_NeoPixel.h>
+#include <ESPTelnet.h>
+#include <SHT85.h>
+
 #include "chars.h"
 #include "cline.h"
 
@@ -46,8 +47,8 @@ const char *ntpHost0 = "0.ru.pool.ntp.org";
 const char *ntpHost1 = "1.ru.pool.ntp.org";
 const char *ntpHost2 = "2.ru.pool.ntp.org";
 
-const char *mssid = "YOUR_SSID";
-const char *mpass = "YOUR_PASS";
+const char *mssid = "Xiaomi_065C";
+const char *mpass = "43v3ry0nG";
 
 const int serial_speed = 115200;
 const uint16_t telnet_port = 23;
@@ -72,9 +73,6 @@ void onTelnetConnectionAttempt(String ip);
 void onTelnetInput(String str);
 void errorMsg(String, bool);
 
-void readSerial();
-String commHandler(String);
-
 int* buttonsRead();
 void buttonsExec(int*);
 
@@ -85,7 +83,9 @@ void lcdBackLight(bool);
 void signalBeep(int);
 void signalBuzz(int, int, int);
 void readSensor(int);
-
+void readSerial();
+std::string reduceString(std::string);
+String commHandler(const String);
 String getTimeStr(int);
 String getSensVal(char);
 String uptimeCount();
@@ -749,14 +749,33 @@ void readSensor(int readPeriod) {
   }
 }
 
+std::string reduceString(std::string str) {
+  int i = 0;
+  while (i < str.length()) {
+    if (str[i] == str[i + 1] && str[i] == ' ') {
+      str.erase(i + 1, 1);
+    } else {
+      i++;
+    }
+  }
+  if (str[0] == ' ') {
+    str.erase(0, 1);
+  }
+  return str;
+}
+
 String commHandler(const String comm_input) {
-  std::string cmd_input(comm_input.c_str());
+
+  std::string raw_input(comm_input.c_str());
+  std::string cmd_input(reduceString(raw_input));
   std::stringstream cmd_strm(cmd_input);
   std::vector<std::string> cmd_vect;
   std::string token;
+
   while (getline(cmd_strm, token, ' ')) {
     cmd_vect.push_back(token);
   }
+
   String comm_output("");
   int exec_case = 0;
   for (int i = 1; i < commands.size(); i++) {
@@ -956,14 +975,42 @@ String commHandler(const String comm_input) {
     }
     case 24:
     {
-      comm_output += "RGB LED should blink\n";
-      ledBlink(3, 100, 200);
+      int blk_count = 1;
+      int blk_length = 50;
+      int blk_pause = 100;
+      if (cmd_vect.size() >= 2) {
+        blk_count = stoi(cmd_vect[1]);
+      }
+      if (cmd_vect.size() >= 3) {
+        blk_length = stoi(cmd_vect[2]);
+      }
+      if (cmd_vect.size() >= 4) {
+        blk_pause = stoi(cmd_vect[3]);
+      }
+      ledBlink(blk_count, blk_length, blk_pause);
+      comm_output += "Blink " + (String)blk_count + " times, " + \
+      String(blk_length) + "ms length, " + (String)blk_pause +   \
+      "ms pause\n";
       break;
     }
     case 25:
     {
-      comm_output += "Signal beeped\n";
-      signalBuzz(3, 50, 100);
+      int sig_count = 1;
+      int sig_length = 50;
+      int sig_pause = 100;
+      if (cmd_vect.size() >= 2) {
+        sig_count = stoi(cmd_vect[1]);
+      }
+      if (cmd_vect.size() >= 3) {
+        sig_length = stoi(cmd_vect[2]);
+      }
+      if (cmd_vect.size() >= 4) {
+        sig_pause = stoi(cmd_vect[3]);
+      }
+      signalBuzz(sig_count, sig_length, sig_pause);
+      comm_output += "Beep " + (String)sig_count + " times, " \
+      + (String)sig_length + "ms length, " + (String)sig_pause\
+      + "ms pause\n";
     }
   }
   return comm_output;
