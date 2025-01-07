@@ -22,7 +22,6 @@ I2C device found at address 0x27 // LCD
 
 #include "chars.h"
 #include "cline.h"
-#include "cwifi.h"
 
 #define I2C_SDA 10
 #define I2C_SCL 11
@@ -43,6 +42,9 @@ I2C device found at address 0x27 // LCD
 #define NUM_RGB_LEDS 1 // number of RGB LEDs (assuming 1 WS2812 LED)
 #define SHT85_ADDRESS 0x44
 #define LCD1602_ADDRESS 0x27
+
+const char *mssid = "test";
+const char *mpass = "test";
 
 const char *ntpHost0 = "0.ru.pool.ntp.org";
 const char *ntpHost1 = "1.ru.pool.ntp.org";
